@@ -1,20 +1,46 @@
-use std::f32::consts::PI;
+use std::{
+    f32::consts::PI,
+    ops::{Index, IndexMut},
+};
 
 use bevy::{
     prelude::*,
     render::{mesh::Indices, render_resource::PrimitiveTopology},
     window::PresentMode,
 };
-use bevy_flycam::{FlyCam, NoCameraPlayerPlugin, PlayerPlugin};
+use bevy_flycam::{FlyCam, NoCameraPlayerPlugin};
 use bevy_inspector_egui::WorldInspectorPlugin;
 use noise::{NoiseFn, Perlin};
-use rand::{thread_rng, Rng};
 
 #[derive(Component)]
 pub struct FollowCamera;
 
 pub const CHUNK_SIZE: usize = 24;
 pub const BLOCK_SIZE: f32 = 0.3;
+
+#[derive(Clone, Copy)]
+pub enum ChunkDirection {
+    Front = 0,
+    Back = 1,
+    Left = 2,
+    Right = 3,
+    Top = 4,
+    Bottom = 5,
+}
+
+impl<T> Index<ChunkDirection> for [T; 6] {
+    type Output = T;
+
+    fn index(&self, index: ChunkDirection) -> &Self::Output {
+        &self[index as usize]
+    }
+}
+
+impl<T> IndexMut<ChunkDirection> for [T; 6] {
+    fn index_mut(&mut self, index: ChunkDirection) -> &mut Self::Output {
+        &mut self[index as usize]
+    }
+}
 
 //TODO serialize?
 pub struct Chunk {
@@ -90,9 +116,7 @@ fn add_face(
     new_verts
         .iter_mut()
         .for_each(|vec| *vec = (rotation * *vec) + transform);
-    new_normals
-        .iter_mut()
-        .for_each(|vec| *vec = (rotation * *vec));
+    new_normals.iter_mut().for_each(|vec| *vec = rotation * *vec);
     //info!("{}", new_normals[1]);
 
     let vert_start = vertices.len();
@@ -107,6 +131,7 @@ fn add_face(
 #[allow(clippy::nonminimal_bool)]
 fn create_mesh_faces(
     chunk: &Chunk,
+    chunk_neighbors: [Option<&Chunk>; 6],
     verts: &mut Vec<Vec3>,
     normals: &mut Vec<Vec3>,
     indicies: &mut Vec<usize>,
@@ -115,9 +140,11 @@ fn create_mesh_faces(
         for y in 0..CHUNK_SIZE {
             for x in 0..CHUNK_SIZE {
                 //Front
-                //TODO check neighbor chunks
                 if (x != CHUNK_SIZE - 1 && chunk.cubes[x][y][z] && !chunk.cubes[x + 1][y][z])
-                    || (x == CHUNK_SIZE - 1 && chunk.cubes[x][y][z])
+                    || (x == CHUNK_SIZE - 1
+                        && chunk.cubes[x][y][z]
+                        && (chunk_neighbors[ChunkDirection::Front].is_none()
+                            || !chunk_neighbors[ChunkDirection::Front].unwrap().cubes[0][y][z]))
                 {
                     add_face(
                         verts,
@@ -132,9 +159,10 @@ fn create_mesh_faces(
                     );
                 }
                 //Back
-                //TODO check neighbor chunks
                 if (x != 0 && chunk.cubes[x][y][z] && !chunk.cubes[x - 1][y][z])
                     || (x == 0 && chunk.cubes[x][y][z])
+                        && (chunk_neighbors[ChunkDirection::Back].is_none()
+                            || !chunk_neighbors[ChunkDirection::Back].unwrap().cubes[CHUNK_SIZE - 1][y][z])
                 {
                     add_face(
                         verts,
@@ -149,9 +177,11 @@ fn create_mesh_faces(
                     );
                 }
                 //Top
-                //TODO check neighbor chunks
+                //TODO Y neighbors are untested
                 if (y != CHUNK_SIZE - 1 && chunk.cubes[x][y][z] && !chunk.cubes[x][y + 1][z])
                     || (y == CHUNK_SIZE - 1 && chunk.cubes[x][y][z])
+                        && (chunk_neighbors[ChunkDirection::Top].is_none()
+                            || !chunk_neighbors[ChunkDirection::Top].unwrap().cubes[x][0][z])
                 {
                     add_face(
                         verts,
@@ -166,9 +196,10 @@ fn create_mesh_faces(
                     );
                 }
                 //Bottom
-                //TODO check neighbor chunks
                 if (y != 0 && chunk.cubes[x][y][z] && !chunk.cubes[x][y - 1][z])
                     || (y == 0 && chunk.cubes[x][y][z])
+                        && (chunk_neighbors[ChunkDirection::Bottom].is_none()
+                            || !chunk_neighbors[ChunkDirection::Bottom].unwrap().cubes[x][CHUNK_SIZE - 1][z])
                 {
                     add_face(
                         verts,
@@ -183,26 +214,24 @@ fn create_mesh_faces(
                     );
                 }
                 //Left
-                //TODO check neighbor chunks
                 if (z != CHUNK_SIZE - 1 && chunk.cubes[x][y][z] && !chunk.cubes[x][y][z + 1])
                     || (z == CHUNK_SIZE - 1 && chunk.cubes[x][y][z])
+                        && (chunk_neighbors[ChunkDirection::Left].is_none()
+                            || !chunk_neighbors[ChunkDirection::Left].unwrap().cubes[x][y][0])
                 {
                     add_face(
                         verts,
                         normals,
                         indicies,
                         Quat::from_axis_angle(Vec3::Y, 0.0),
-                        Vec3::new(
-                            (x as f32) * BLOCK_SIZE,
-                            y as f32 * BLOCK_SIZE,
-                            (z as f32) * BLOCK_SIZE,
-                        ),
+                        Vec3::new((x as f32) * BLOCK_SIZE, y as f32 * BLOCK_SIZE, (z as f32) * BLOCK_SIZE),
                     );
                 }
-                //Back
-                //TODO check neighbor chunks
+                //Right
                 if (z != 0 && chunk.cubes[x][y][z] && !chunk.cubes[x][y][z - 1])
                     || (z == 0 && chunk.cubes[x][y][z])
+                        && (chunk_neighbors[ChunkDirection::Right].is_none()
+                            || !chunk_neighbors[ChunkDirection::Right].unwrap().cubes[x][y][CHUNK_SIZE - 1])
                 {
                     add_face(
                         verts,
@@ -221,33 +250,24 @@ fn create_mesh_faces(
     }
 }
 
-fn create_chunk_mesh(chunk: &Chunk) -> Mesh {
+fn create_chunk_mesh(chunk: &Chunk, neighbors: [Option<&Chunk>; 6]) -> Mesh {
     let mut mesh = Mesh::new(PrimitiveTopology::TriangleList);
     let mut verts = Vec::default();
     let mut normals = Vec::default();
     let mut indicies = Vec::default();
 
-    create_mesh_faces(chunk, &mut verts, &mut normals, &mut indicies);
+    create_mesh_faces(chunk, neighbors, &mut verts, &mut normals, &mut indicies);
 
     mesh.insert_attribute(
         Mesh::ATTRIBUTE_POSITION,
-        verts
-            .iter()
-            .map(|vec| vec.to_array())
-            .collect::<Vec<[f32; 3]>>(),
+        verts.iter().map(|vec| vec.to_array()).collect::<Vec<[f32; 3]>>(),
     );
     mesh.insert_attribute(
         Mesh::ATTRIBUTE_NORMAL,
-        normals
-            .iter()
-            .map(|vec| vec.to_array())
-            .collect::<Vec<[f32; 3]>>(),
+        normals.iter().map(|vec| vec.to_array()).collect::<Vec<[f32; 3]>>(),
     );
     mesh.set_indices(Some(Indices::U32(
-        indicies
-            .iter()
-            .map(|usized| *usized as u32)
-            .collect::<Vec<u32>>(),
+        indicies.iter().map(|usized| *usized as u32).collect::<Vec<u32>>(),
     )));
     mesh
 }
@@ -277,17 +297,46 @@ fn gen_chunk(chunk_x: f32, chunk_z: f32) -> Chunk {
     chunk
 }
 
+#[allow(clippy::needless_range_loop)]
 fn spawn_custom_mesh(
     mut commands: Commands,
     mut materials: ResMut<Assets<StandardMaterial>>,
     mut meshes: ResMut<Assets<Mesh>>,
 ) {
-    for x in 0..20 {
-        for z in 0..20 {
+    let chunks_to_spawn = 20;
+    //FIXME dont use a vec for this
+    let mut chunks: Vec<Vec<Chunk>> = Vec::default();
+
+    for x in 0..chunks_to_spawn {
+        chunks.push(Vec::default());
+        for z in 0..chunks_to_spawn {
             let chunk_x = x as f32 * CHUNK_SIZE as f32 * BLOCK_SIZE;
             let chunk_z = z as f32 * CHUNK_SIZE as f32 * BLOCK_SIZE;
             let chunk = gen_chunk(chunk_x, chunk_z);
-            let mesh = create_chunk_mesh(&chunk);
+            chunks[x].push(chunk);
+        }
+    }
+
+    for x in 0..chunks_to_spawn {
+        for z in 0..chunks_to_spawn {
+            let chunk_x = x as f32 * CHUNK_SIZE as f32 * BLOCK_SIZE;
+            let chunk_z = z as f32 * CHUNK_SIZE as f32 * BLOCK_SIZE;
+            let mut neighbors: [Option<&Chunk>; 6] = Default::default();
+
+            if x != chunks_to_spawn - 1 {
+                neighbors[ChunkDirection::Front] = Some(&chunks[x + 1][z]);
+            }
+            if x != 0 {
+                neighbors[ChunkDirection::Back] = Some(&chunks[x - 1][z]);
+            }
+            if z != 0 {
+                neighbors[ChunkDirection::Right] = Some(&chunks[x][z - 1]);
+            }
+            if z != chunks_to_spawn - 1 {
+                neighbors[ChunkDirection::Left] = Some(&chunks[x][z + 1]);
+            }
+
+            let mesh = create_chunk_mesh(&chunks[x][z], neighbors);
 
             commands.spawn_bundle(PbrBundle {
                 mesh: meshes.add(mesh),
@@ -302,8 +351,7 @@ fn spawn_custom_mesh(
 fn spawn_camera(mut commands: Commands) {
     commands
         .spawn_bundle(Camera3dBundle {
-            transform: Transform::from_xyz(-3.0, 15.5, -1.0)
-                .looking_at(Vec3::new(100.0, 0.0, 100.0), Vec3::Y),
+            transform: Transform::from_xyz(-3.0, 15.5, -1.0).looking_at(Vec3::new(100.0, 0.0, 100.0), Vec3::Y),
             ..default()
         })
         .insert(FlyCam)

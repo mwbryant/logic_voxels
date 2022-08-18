@@ -1,0 +1,5 @@
+# Please why does the formatter break up things like array[x][y][z] into
+# array[x][y]
+# [z];
+
+max_width = 120

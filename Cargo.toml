@@ -15,4 +15,6 @@ bevy-inspector-egui = "0.12.1"
 bevy_flycam = "0.8"
 rand = "*"
 noise = "0.7"
+strum = "0.24"
+strum_macros = "0.24"
 
