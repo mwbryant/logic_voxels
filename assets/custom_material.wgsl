@@ -42,6 +42,6 @@ fn fragment(input: VertexOutput) -> @location(0) vec4<f32> {
     uv.x += f32(input.index & u32(0x000F)) / 16.0;
     uv.y += f32(input.index & u32(0x00F0)) / 16.0;
 
-    //return vec4<f32>(input.index, 0.0, 0.0, 1.0);
+    //return vec4<f32>(f32(input.index & u32(0x00F0)) /16.0, 0.0, 0.0, 1.0);
     return textureSample(texture, texture_sampler, uv);
 }

@@ -215,10 +215,10 @@ fn add_face(
     let new_texture_indices = [face_index; 4];
 
     let new_uvs = [
-        Vec2::new(0.01, 0.01),
-        Vec2::new(0.99, 0.01),
-        Vec2::new(0.99, 0.99),
         Vec2::new(0.01, 0.99),
+        Vec2::new(0.99, 0.99),
+        Vec2::new(0.99, 0.01),
+        Vec2::new(0.01, 0.01),
     ];
 
     new_verts
