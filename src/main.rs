@@ -42,13 +42,39 @@ impl<T> IndexMut<ChunkDirection> for [T; 6] {
 
 //TODO serialize?
 pub struct Chunk {
-    cubes: [[[bool; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE],
+    cubes: [[[Block; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE],
+}
+
+impl Block {
+    fn is_filled(&self) -> bool {
+        !matches!(self, Block::Air)
+    }
+
+    fn get_face_index(&self, direction: ChunkDirection) -> u32 {
+        match self {
+            Block::Air => 0,
+            Block::Grass => match direction {
+                ChunkDirection::Front | ChunkDirection::Back | ChunkDirection::Left | ChunkDirection::Right => 1,
+                ChunkDirection::Top => 0,
+                ChunkDirection::Bottom => 2,
+            },
+            Block::Dirt => 2,
+        }
+    }
+}
+
+#[derive(Default, Clone, Copy)]
+pub enum Block {
+    #[default]
+    Air,
+    Grass,
+    Dirt,
 }
 
 impl Default for Chunk {
     fn default() -> Chunk {
         Chunk {
-            cubes: [[[false; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE],
+            cubes: [[[Block::Air; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE],
         }
     }
 }
@@ -105,7 +131,9 @@ fn gen_chunk(chunk_x: f32, chunk_z: f32) -> Chunk {
                             (z as f64 * BLOCK_SIZE as f64 + chunk_z as f64) / 3.253,
                         ])
                         + 0.06);
-                chunk.cubes[x][y][z] = value >= (y as f32 / CHUNK_SIZE as f32) as f64 || y == 0;
+                if value >= (y as f32 / CHUNK_SIZE as f32) as f64 || y == 0 {
+                    chunk.cubes[x][y][z] = Block::Grass
+                }
             }
         }
     }
