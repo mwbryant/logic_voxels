@@ -1,4 +1,7 @@
-use std::ops::{Index, IndexMut};
+use std::{
+    cell::RefCell,
+    ops::{Index, IndexMut},
+};
 
 use bevy::{asset::AssetServerSettings, prelude::*, render::texture::ImageSettings, window::PresentMode};
 use bevy_flycam::{FlyCam, NoCameraPlayerPlugin};
@@ -43,6 +46,7 @@ impl<T> IndexMut<ChunkDirection> for [T; 6] {
 //TODO serialize?
 pub struct Chunk {
     cubes: [[[Block; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE],
+    dirty: bool,
 }
 
 impl Block {
@@ -75,6 +79,7 @@ impl Default for Chunk {
     fn default() -> Chunk {
         Chunk {
             cubes: [[[Block::Air; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE],
+            dirty: false,
         }
     }
 }
@@ -102,6 +107,53 @@ fn main() {
         .add_startup_system(spawn_custom_mesh)
         .add_system(camera_follow)
         .run();
+}
+
+fn apply_function_to_blocks<F>(chunk: &mut Chunk, neighbors: [Option<&Chunk>; 6], mut function: F)
+where
+    F: FnMut(&mut Block, [Option<Block>; 6]) -> bool,
+{
+    for z in 0..CHUNK_SIZE {
+        for y in 0..CHUNK_SIZE {
+            for x in 0..CHUNK_SIZE {
+                let mut block_neighbors = [None; 6];
+                //Front
+                if x != CHUNK_SIZE - 1 {
+                    block_neighbors[ChunkDirection::Front] = Some(chunk.cubes[x + 1][y][z]);
+                } else if let Some(front) = neighbors[ChunkDirection::Front] {
+                    block_neighbors[ChunkDirection::Front] = Some(front.cubes[0][y][z]);
+                }
+                //Back
+                if x != 0 {
+                    block_neighbors[ChunkDirection::Back] = Some(chunk.cubes[x - 1][y][z]);
+                } else if let Some(front) = neighbors[ChunkDirection::Back] {
+                    block_neighbors[ChunkDirection::Back] = Some(front.cubes[CHUNK_SIZE - 1][y][z]);
+                }
+                //Top
+                if y != CHUNK_SIZE - 1 {
+                    block_neighbors[ChunkDirection::Top] = Some(chunk.cubes[x][y + 1][z]);
+                } else if let Some(front) = neighbors[ChunkDirection::Top] {
+                    block_neighbors[ChunkDirection::Top] = Some(front.cubes[x][0][z]);
+                }
+                warn!("Unfinished cases!");
+                if function(&mut chunk.cubes[x][y][z], block_neighbors) {
+                    chunk.dirty = true;
+                }
+            }
+        }
+    }
+}
+
+fn update_dirt(block: &mut Block, neighbors: [Option<Block>; 6]) -> bool {
+    if !matches!(block, Block::Grass) {
+        if let Some(top) = neighbors[ChunkDirection::Top] {
+            if !matches!(top, Block::Air) {
+                *block = Block::Dirt;
+                return true;
+            }
+        }
+    }
+    false
 }
 
 fn camera_follow(
@@ -179,6 +231,8 @@ fn spawn_custom_mesh(
             if z != chunks_to_spawn - 1 {
                 neighbors[ChunkDirection::Left] = Some(&chunks[x][z + 1]);
             }
+            //TESTING
+            apply_function_to_blocks(&mut chunks[x][z], neighbors, update_dirt);
 
             let mesh = create_chunk_mesh(&chunks[x][z], neighbors);
 
