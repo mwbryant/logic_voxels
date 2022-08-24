@@ -1,12 +1,14 @@
 use std::ops::{Index, IndexMut};
 
-use bevy::{prelude::*, window::PresentMode};
+use bevy::{asset::AssetServerSettings, prelude::*, render::texture::ImageSettings, window::PresentMode};
 use bevy_flycam::{FlyCam, NoCameraPlayerPlugin};
 use bevy_inspector_egui::WorldInspectorPlugin;
 use chunk_mesh_generation::create_chunk_mesh;
+use material::CustomMaterial;
 use noise::{NoiseFn, Perlin};
 
 mod chunk_mesh_generation;
+mod material;
 
 #[derive(Component)]
 pub struct FollowCamera;
@@ -53,6 +55,7 @@ impl Default for Chunk {
 
 fn main() {
     App::new()
+        .insert_resource(ImageSettings::default_nearest())
         .insert_resource(WindowDescriptor {
             width: 1280.,
             height: 720.,
@@ -61,7 +64,12 @@ fn main() {
             resizable: false,
             ..Default::default()
         })
+        .insert_resource(AssetServerSettings {
+            watch_for_changes: true,
+            ..default()
+        })
         .add_plugins(DefaultPlugins)
+        .add_plugin(MaterialPlugin::<CustomMaterial>::default())
         .add_plugin(WorldInspectorPlugin::default())
         .add_plugin(NoCameraPlayerPlugin)
         .add_startup_system(spawn_camera)
@@ -107,8 +115,9 @@ fn gen_chunk(chunk_x: f32, chunk_z: f32) -> Chunk {
 #[allow(clippy::needless_range_loop)]
 fn spawn_custom_mesh(
     mut commands: Commands,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    mut materials: ResMut<Assets<CustomMaterial>>,
     mut meshes: ResMut<Assets<Mesh>>,
+    server: Res<AssetServer>,
 ) {
     let chunks_to_spawn = 20;
     //FIXME dont use a vec for this
@@ -145,9 +154,11 @@ fn spawn_custom_mesh(
 
             let mesh = create_chunk_mesh(&chunks[x][z], neighbors);
 
-            commands.spawn_bundle(PbrBundle {
+            commands.spawn_bundle(MaterialMeshBundle {
                 mesh: meshes.add(mesh),
-                material: materials.add(Color::rgb(0.53, 0.53, 0.67).into()),
+                material: materials.add(CustomMaterial {
+                    textures: server.load("test_texture.png"),
+                }),
                 transform: Transform::from_xyz(chunk_x, 0.0, chunk_z),
                 ..default()
             });
