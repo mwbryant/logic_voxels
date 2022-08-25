@@ -20,7 +20,7 @@ pub struct MeshDescription {
 pub fn create_chunk_mesh(chunk: &Chunk) -> Mesh {
     let mut mesh = Mesh::new(PrimitiveTopology::TriangleList);
     let mut description = MeshDescription::default();
-    create_mesh_faces(chunk, neighbors, &mut description);
+    create_mesh_faces(chunk, &mut description);
 
     mesh.insert_attribute(
         Mesh::ATTRIBUTE_POSITION,
@@ -60,25 +60,18 @@ pub fn create_chunk_mesh(chunk: &Chunk) -> Mesh {
 
 //Clippy is angry but I am going to add more to the if clauses soon and the suggestions are less clear
 #[allow(clippy::nonminimal_bool)]
-fn create_mesh_faces(chunk: &Chunk, chunk_neighbors: [Option<&Chunk>; 6], mesh_description: &mut MeshDescription) {
-    for z in 0..CHUNK_SIZE {
-        for y in 0..CHUNK_SIZE {
-            for x in 0..CHUNK_SIZE {
-                //Front
-                if (x != CHUNK_SIZE - 1
-                    && chunk.cubes.clone().read().unwrap()[x][y][z].is_filled()
-                    && !chunk.cubes.clone().read().unwrap()[x + 1][y][z].is_filled())
-                    || (x == CHUNK_SIZE - 1
-                        && chunk.cubes.clone().read().unwrap()[x][y][z].is_filled()
-                        && (chunk_neighbors[ChunkDirection::Front].is_none()
-                            || !chunk_neighbors[ChunkDirection::Front]
-                                .unwrap()
-                                .cubes
-                                .clone()
-                                .read()
-                                .unwrap()[0][y][z]
-                                .is_filled()))
-                {
+fn create_mesh_faces(chunk: &Chunk, mesh_description: &mut MeshDescription) {
+    for z in 0..CHUNK_SIZE as isize {
+        for y in 0..CHUNK_SIZE as isize {
+            for x in 0..CHUNK_SIZE as isize {
+                let current_block = chunk.get_block(x, y, z).unwrap();
+                let front_block = chunk.get_block(x + 1, y, z);
+                let back_block = chunk.get_block(x - 1, y, z);
+                let left_block = chunk.get_block(x, y, z + 1);
+                let right_block = chunk.get_block(x, y, z - 1);
+                let top_block = chunk.get_block(x, y + 1, z);
+                let bottom_block = chunk.get_block(x, y - 1, z);
+                if current_block.is_filled() && (front_block.is_none() || !front_block.unwrap().is_filled()) {
                     add_face(
                         mesh_description,
                         Quat::from_axis_angle(Vec3::Y, PI / 2.0),
@@ -87,23 +80,11 @@ fn create_mesh_faces(chunk: &Chunk, chunk_neighbors: [Option<&Chunk>; 6], mesh_d
                             y as f32 * BLOCK_SIZE,
                             (z as f32 - 0.5) * BLOCK_SIZE,
                         ),
-                        chunk.cubes.clone().read().unwrap()[x][y][z].get_face_index(ChunkDirection::Front),
+                        current_block.get_face_index(ChunkDirection::Front),
                     );
                 }
                 //Back
-                if (x != 0
-                    && chunk.cubes.clone().read().unwrap()[x][y][z].is_filled()
-                    && !chunk.cubes.clone().read().unwrap()[x - 1][y][z].is_filled())
-                    || (x == 0 && chunk.cubes.clone().read().unwrap()[x][y][z].is_filled())
-                        && (chunk_neighbors[ChunkDirection::Back].is_none()
-                            || !chunk_neighbors[ChunkDirection::Back]
-                                .unwrap()
-                                .cubes
-                                .clone()
-                                .read()
-                                .unwrap()[CHUNK_SIZE - 1][y][z]
-                                .is_filled())
-                {
+                if current_block.is_filled() && (back_block.is_none() || !back_block.unwrap().is_filled()) {
                     add_face(
                         mesh_description,
                         Quat::from_axis_angle(Vec3::Y, -PI / 2.0),
@@ -112,24 +93,12 @@ fn create_mesh_faces(chunk: &Chunk, chunk_neighbors: [Option<&Chunk>; 6], mesh_d
                             y as f32 * BLOCK_SIZE,
                             (z as f32 - 0.5) * BLOCK_SIZE,
                         ),
-                        chunk.cubes.clone().read().unwrap()[x][y][z].get_face_index(ChunkDirection::Back),
+                        current_block.get_face_index(ChunkDirection::Back),
                     );
                 }
                 //Top
                 //TODO Y neighbors are untested
-                if (y != CHUNK_SIZE - 1
-                    && chunk.cubes.clone().read().unwrap()[x][y][z].is_filled()
-                    && !chunk.cubes.clone().read().unwrap()[x][y + 1][z].is_filled())
-                    || (y == CHUNK_SIZE - 1 && chunk.cubes.clone().read().unwrap()[x][y][z].is_filled())
-                        && (chunk_neighbors[ChunkDirection::Top].is_none()
-                            || !chunk_neighbors[ChunkDirection::Top]
-                                .unwrap()
-                                .cubes
-                                .clone()
-                                .read()
-                                .unwrap()[x][0][z]
-                                .is_filled())
-                {
+                if current_block.is_filled() && (top_block.is_none() || !top_block.unwrap().is_filled()) {
                     add_face(
                         mesh_description,
                         Quat::from_axis_angle(Vec3::X, -PI / 2.0),
@@ -138,23 +107,11 @@ fn create_mesh_faces(chunk: &Chunk, chunk_neighbors: [Option<&Chunk>; 6], mesh_d
                             (y as f32 + 0.5) * BLOCK_SIZE,
                             (z as f32 - 0.5) * BLOCK_SIZE,
                         ),
-                        chunk.cubes.clone().read().unwrap()[x][y][z].get_face_index(ChunkDirection::Top),
+                        current_block.get_face_index(ChunkDirection::Top),
                     );
                 }
                 //Bottom
-                if (y != 0
-                    && chunk.cubes.clone().read().unwrap()[x][y][z].is_filled()
-                    && !chunk.cubes.clone().read().unwrap()[x][y - 1][z].is_filled())
-                    || (y == 0 && chunk.cubes.clone().read().unwrap()[x][y][z].is_filled())
-                        && (chunk_neighbors[ChunkDirection::Bottom].is_none()
-                            || !chunk_neighbors[ChunkDirection::Bottom]
-                                .unwrap()
-                                .cubes
-                                .clone()
-                                .read()
-                                .unwrap()[x][CHUNK_SIZE - 1][z]
-                                .is_filled())
-                {
+                if current_block.is_filled() && (bottom_block.is_none() || !bottom_block.unwrap().is_filled()) {
                     add_face(
                         mesh_description,
                         Quat::from_axis_angle(Vec3::X, PI / 2.0),
@@ -163,44 +120,20 @@ fn create_mesh_faces(chunk: &Chunk, chunk_neighbors: [Option<&Chunk>; 6], mesh_d
                             (y as f32 - 0.5) * BLOCK_SIZE,
                             (z as f32 - 0.5) * BLOCK_SIZE,
                         ),
-                        chunk.cubes.clone().read().unwrap()[x][y][z].get_face_index(ChunkDirection::Bottom),
+                        current_block.get_face_index(ChunkDirection::Bottom),
                     );
                 }
                 //Left
-                if (z != CHUNK_SIZE - 1
-                    && chunk.cubes.clone().read().unwrap()[x][y][z].is_filled()
-                    && !chunk.cubes.clone().read().unwrap()[x][y][z + 1].is_filled())
-                    || (z == CHUNK_SIZE - 1 && chunk.cubes.clone().read().unwrap()[x][y][z].is_filled())
-                        && (chunk_neighbors[ChunkDirection::Left].is_none()
-                            || !chunk_neighbors[ChunkDirection::Left]
-                                .unwrap()
-                                .cubes
-                                .clone()
-                                .read()
-                                .unwrap()[x][y][0]
-                                .is_filled())
-                {
+                if current_block.is_filled() && (left_block.is_none() || !left_block.unwrap().is_filled()) {
                     add_face(
                         mesh_description,
                         Quat::from_axis_angle(Vec3::Y, 0.0),
                         Vec3::new((x as f32) * BLOCK_SIZE, y as f32 * BLOCK_SIZE, (z as f32) * BLOCK_SIZE),
-                        chunk.cubes.clone().read().unwrap()[x][y][z].get_face_index(ChunkDirection::Left),
+                        current_block.get_face_index(ChunkDirection::Left),
                     );
                 }
                 //Right
-                if (z != 0
-                    && chunk.cubes.clone().read().unwrap()[x][y][z].is_filled()
-                    && !chunk.cubes.clone().read().unwrap()[x][y][z - 1].is_filled())
-                    || (z == 0 && chunk.cubes.clone().read().unwrap()[x][y][z].is_filled())
-                        && (chunk_neighbors[ChunkDirection::Right].is_none()
-                            || !chunk_neighbors[ChunkDirection::Right]
-                                .unwrap()
-                                .cubes
-                                .clone()
-                                .read()
-                                .unwrap()[x][y][CHUNK_SIZE - 1]
-                                .is_filled())
-                {
+                if current_block.is_filled() && (right_block.is_none() || !right_block.unwrap().is_filled()) {
                     add_face(
                         mesh_description,
                         Quat::from_axis_angle(Vec3::Y, PI),
@@ -209,7 +142,7 @@ fn create_mesh_faces(chunk: &Chunk, chunk_neighbors: [Option<&Chunk>; 6], mesh_d
                             y as f32 * BLOCK_SIZE,
                             (z as f32 - 1.0) * BLOCK_SIZE,
                         ),
-                        chunk.cubes.clone().read().unwrap()[x][y][z].get_face_index(ChunkDirection::Right),
+                        current_block.get_face_index(ChunkDirection::Right),
                     );
                 }
             }

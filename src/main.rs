@@ -25,12 +25,12 @@ pub const BLOCK_SIZE: f32 = 0.3;
 
 #[derive(Clone, Copy)]
 pub enum ChunkDirection {
-    Front = 0,
-    Back = 1,
-    Left = 2,
-    Right = 3,
-    Top = 4,
-    Bottom = 5,
+    Front = 0,  // x + 1
+    Back = 1,   // x - 1
+    Left = 2,   // z + 1
+    Right = 3,  // z - 1
+    Top = 4,    // y + 1
+    Bottom = 5, // y - 1
 }
 
 impl<T> Index<ChunkDirection> for [T; 6] {
@@ -56,6 +56,50 @@ pub struct Chunk {
     cubes: Arc<ChunkData>,
     dirty: Mutex<bool>,
     neighbors: [Weak<ChunkData>; 6],
+}
+
+impl Chunk {
+    pub fn get_block(&self, x: isize, y: isize, z: isize) -> Option<Block> {
+        if Self::index_inbounds(x) && Self::index_inbounds(y) && Self::index_inbounds(z) {
+            Some(self.cubes.clone().read().unwrap()[x as usize][y as usize][z as usize])
+        } else if x < 0 {
+            assert!(Self::index_inbounds(y) && Self::index_inbounds(z));
+            self.neighbors[ChunkDirection::Back]
+                .upgrade()
+                .map(|back| back.read().unwrap()[CHUNK_SIZE - 1][y as usize][z as usize])
+        } else if x >= CHUNK_SIZE as isize {
+            assert!(Self::index_inbounds(y) && Self::index_inbounds(z));
+            self.neighbors[ChunkDirection::Front]
+                .upgrade()
+                .map(|front| front.read().unwrap()[0][y as usize][z as usize])
+        } else if z < 0 {
+            assert!(Self::index_inbounds(x) && Self::index_inbounds(y));
+            self.neighbors[ChunkDirection::Right]
+                .upgrade()
+                .map(|front| front.read().unwrap()[x as usize][y as usize][CHUNK_SIZE - 1])
+        } else if z >= CHUNK_SIZE as isize {
+            assert!(Self::index_inbounds(x) && Self::index_inbounds(y));
+            self.neighbors[ChunkDirection::Left]
+                .upgrade()
+                .map(|back| back.read().unwrap()[x as usize][y as usize][0])
+        } else if y < 0 {
+            assert!(Self::index_inbounds(x) && Self::index_inbounds(z));
+            self.neighbors[ChunkDirection::Bottom]
+                .upgrade()
+                .map(|bottom| bottom.read().unwrap()[x as usize][CHUNK_SIZE - 1][z as usize])
+        } else if y >= CHUNK_SIZE as isize {
+            assert!(Self::index_inbounds(x) && Self::index_inbounds(z));
+            self.neighbors[ChunkDirection::Top]
+                .upgrade()
+                .map(|top| top.read().unwrap()[x as usize][0][z as usize])
+        } else {
+            None
+        }
+    }
+
+    fn index_inbounds(index: isize) -> bool {
+        index >= 0 && index < CHUNK_SIZE as isize
+    }
 }
 
 impl Block {
@@ -132,31 +176,21 @@ fn apply_function_to_blocks<F>(chunk: &Chunk, mut function: F)
 where
     F: FnMut(&mut Block, [Option<Block>; 6]) -> bool,
 {
-    for z in 0..CHUNK_SIZE {
-        for y in 0..CHUNK_SIZE {
-            for x in 0..CHUNK_SIZE {
+    for z in 0..CHUNK_SIZE as isize {
+        for y in 0..CHUNK_SIZE as isize {
+            for x in 0..CHUNK_SIZE as isize {
                 let mut block_neighbors = [None; 6];
                 //Front
-                if x != CHUNK_SIZE - 1 {
-                    block_neighbors[ChunkDirection::Front] = Some(chunk.cubes.clone().read().unwrap()[x + 1][y][z]);
-                } else if let Some(front) = neighbors[ChunkDirection::Front] {
-                    block_neighbors[ChunkDirection::Front] = Some(front.cubes.clone().read().unwrap()[0][y][z]);
-                }
-                //Back
-                if x != 0 {
-                    block_neighbors[ChunkDirection::Back] = Some(chunk.cubes.clone().read().unwrap()[x - 1][y][z]);
-                } else if let Some(front) = neighbors[ChunkDirection::Back] {
-                    block_neighbors[ChunkDirection::Back] =
-                        Some(front.cubes.clone().read().unwrap()[CHUNK_SIZE - 1][y][z]);
-                }
-                //Top
-                if y != CHUNK_SIZE - 1 {
-                    block_neighbors[ChunkDirection::Top] = Some(chunk.cubes.clone().read().unwrap()[x][y + 1][z]);
-                } else if let Some(front) = neighbors[ChunkDirection::Top] {
-                    block_neighbors[ChunkDirection::Top] = Some(front.cubes.clone().read().unwrap()[x][0][z]);
-                }
-                //warn!("Unfinished cases!");
-                if function(&mut chunk.cubes.clone().write().unwrap()[x][y][z], block_neighbors) {
+                block_neighbors[ChunkDirection::Front] = chunk.get_block(x + 1, y, z);
+                block_neighbors[ChunkDirection::Back] = chunk.get_block(x - 1, y, z);
+                block_neighbors[ChunkDirection::Left] = chunk.get_block(x, y, z + 1);
+                block_neighbors[ChunkDirection::Right] = chunk.get_block(x, y, z - 1);
+                block_neighbors[ChunkDirection::Top] = chunk.get_block(x, y + 1, z);
+                block_neighbors[ChunkDirection::Bottom] = chunk.get_block(x, y - 1, z);
+                if function(
+                    &mut chunk.cubes.clone().write().unwrap()[x as usize][y as usize][z as usize],
+                    block_neighbors,
+                ) {
                     *chunk.dirty.lock().unwrap() = true;
                 }
             }
@@ -187,7 +221,7 @@ fn camera_follow(
 }
 
 fn gen_chunk(chunk_x: f32, chunk_z: f32) -> Chunk {
-    let mut chunk = Chunk::default();
+    let chunk = Chunk::default();
     let perlin = Perlin::new();
 
     for z in 0..CHUNK_SIZE {
@@ -220,7 +254,7 @@ fn spawn_custom_mesh(
     mut meshes: ResMut<Assets<Mesh>>,
     server: Res<AssetServer>,
 ) {
-    let chunks_to_spawn = 20;
+    let chunks_to_spawn = 5;
     //FIXME dont use a vec for this
     let mut chunks: Vec<Vec<Chunk>> = Vec::default();
 
