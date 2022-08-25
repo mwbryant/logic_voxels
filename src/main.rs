@@ -1,7 +1,9 @@
+use rayon::iter::ParallelIterator;
 use std::{
     borrow::Borrow,
     cell::RefCell,
     ops::{Index, IndexMut},
+    sync::{Arc, Mutex, RwLock, Weak},
 };
 
 use bevy::{asset::AssetServerSettings, prelude::*, render::texture::ImageSettings, window::PresentMode};
@@ -10,6 +12,7 @@ use bevy_inspector_egui::WorldInspectorPlugin;
 use chunk_mesh_generation::create_chunk_mesh;
 use material::CustomMaterial;
 use noise::{NoiseFn, Perlin};
+use rayon::prelude::IntoParallelIterator;
 
 mod chunk_mesh_generation;
 mod material;
@@ -44,10 +47,15 @@ impl<T> IndexMut<ChunkDirection> for [T; 6] {
     }
 }
 
+type ChunkData = RwLock<[[[Block; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]>;
+
 //TODO serialize?
+//PERF there has to be a more performant way of handling this
+#[derive(Component)]
 pub struct Chunk {
-    cubes: RefCell<[[[Block; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]>,
-    dirty: RefCell<bool>,
+    cubes: Arc<ChunkData>,
+    dirty: Mutex<bool>,
+    neighbors: [Weak<ChunkData>; 6],
 }
 
 impl Block {
@@ -79,11 +87,21 @@ pub enum Block {
 impl Default for Chunk {
     fn default() -> Chunk {
         Chunk {
-            cubes: RefCell::new([[[Block::Air; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]),
-            dirty: RefCell::new(false),
+            cubes: Arc::new(RwLock::new([[[Block::Air; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE])),
+            dirty: Mutex::new(false),
+            neighbors: [
+                Weak::new(),
+                Weak::new(),
+                Weak::new(),
+                Weak::new(),
+                Weak::new(),
+                Weak::new(),
+            ],
         }
     }
 }
+
+fn update_dirty_chunks() {}
 
 fn main() {
     App::new()
@@ -110,7 +128,7 @@ fn main() {
         .run();
 }
 
-fn apply_function_to_blocks<F>(chunk: &Chunk, neighbors: [Option<&Chunk>; 6], mut function: F)
+fn apply_function_to_blocks<F>(chunk: &Chunk, mut function: F)
 where
     F: FnMut(&mut Block, [Option<Block>; 6]) -> bool,
 {
@@ -120,25 +138,26 @@ where
                 let mut block_neighbors = [None; 6];
                 //Front
                 if x != CHUNK_SIZE - 1 {
-                    block_neighbors[ChunkDirection::Front] = Some(chunk.cubes.borrow()[x + 1][y][z]);
+                    block_neighbors[ChunkDirection::Front] = Some(chunk.cubes.clone().read().unwrap()[x + 1][y][z]);
                 } else if let Some(front) = neighbors[ChunkDirection::Front] {
-                    block_neighbors[ChunkDirection::Front] = Some(front.cubes.borrow()[0][y][z]);
+                    block_neighbors[ChunkDirection::Front] = Some(front.cubes.clone().read().unwrap()[0][y][z]);
                 }
                 //Back
                 if x != 0 {
-                    block_neighbors[ChunkDirection::Back] = Some(chunk.cubes.borrow()[x - 1][y][z]);
+                    block_neighbors[ChunkDirection::Back] = Some(chunk.cubes.clone().read().unwrap()[x - 1][y][z]);
                 } else if let Some(front) = neighbors[ChunkDirection::Back] {
-                    block_neighbors[ChunkDirection::Back] = Some(front.cubes.borrow()[CHUNK_SIZE - 1][y][z]);
+                    block_neighbors[ChunkDirection::Back] =
+                        Some(front.cubes.clone().read().unwrap()[CHUNK_SIZE - 1][y][z]);
                 }
                 //Top
                 if y != CHUNK_SIZE - 1 {
-                    block_neighbors[ChunkDirection::Top] = Some(chunk.cubes.borrow()[x][y + 1][z]);
+                    block_neighbors[ChunkDirection::Top] = Some(chunk.cubes.clone().read().unwrap()[x][y + 1][z]);
                 } else if let Some(front) = neighbors[ChunkDirection::Top] {
-                    block_neighbors[ChunkDirection::Top] = Some(front.cubes.borrow()[x][0][z]);
+                    block_neighbors[ChunkDirection::Top] = Some(front.cubes.clone().read().unwrap()[x][0][z]);
                 }
                 //warn!("Unfinished cases!");
-                if function(&mut chunk.cubes.borrow_mut()[x][y][z], block_neighbors) {
-                    *chunk.dirty.borrow_mut() = true;
+                if function(&mut chunk.cubes.clone().write().unwrap()[x][y][z], block_neighbors) {
+                    *chunk.dirty.lock().unwrap() = true;
                 }
             }
         }
@@ -186,7 +205,7 @@ fn gen_chunk(chunk_x: f32, chunk_z: f32) -> Chunk {
                         ])
                         + 0.06);
                 if value >= (y as f32 / CHUNK_SIZE as f32) as f64 || y == 0 {
-                    chunk.cubes.borrow_mut()[x][y][z] = Block::Grass
+                    chunk.cubes.clone().write().unwrap()[x][y][z] = Block::Grass
                 }
             }
         }
@@ -214,45 +233,55 @@ fn spawn_custom_mesh(
             chunks[x].push(chunk);
         }
     }
-
+    //link chunk neighbors
     for x in 0..chunks_to_spawn {
         for z in 0..chunks_to_spawn {
-            let chunk_x = x as f32 * CHUNK_SIZE as f32 * BLOCK_SIZE;
-            let chunk_z = z as f32 * CHUNK_SIZE as f32 * BLOCK_SIZE;
-            let mut neighbors: [Option<&Chunk>; 6] = Default::default();
-
             if x != chunks_to_spawn - 1 {
-                neighbors[ChunkDirection::Front] = Some(&chunks[x + 1][z]);
+                chunks[x][z].neighbors[ChunkDirection::Front] = Arc::downgrade(&chunks[x + 1][z].cubes);
             }
             if x != 0 {
-                neighbors[ChunkDirection::Back] = Some(&chunks[x - 1][z]);
+                chunks[x][z].neighbors[ChunkDirection::Back] = Arc::downgrade(&chunks[x - 1][z].cubes);
             }
             if z != 0 {
-                neighbors[ChunkDirection::Right] = Some(&chunks[x][z - 1]);
+                chunks[x][z].neighbors[ChunkDirection::Right] = Arc::downgrade(&chunks[x][z - 1].cubes);
             }
             if z != chunks_to_spawn - 1 {
-                neighbors[ChunkDirection::Left] = Some(&chunks[x][z + 1]);
-            }
-            //TESTING
-            {
-                let _span = info_span!("span_name", name = "span_name").entered();
-                apply_function_to_blocks(&chunks[x][z], neighbors, update_dirt);
-            }
-
-            {
-                let _span = info_span!("create_mesh", name = "create_mesh").entered();
-                let mesh = create_chunk_mesh(&chunks[x][z], neighbors);
-
-                commands.spawn_bundle(MaterialMeshBundle {
-                    mesh: meshes.add(mesh),
-                    material: materials.add(CustomMaterial {
-                        textures: server.load("test_texture.png"),
-                    }),
-                    transform: Transform::from_xyz(chunk_x, 0.0, chunk_z),
-                    ..default()
-                });
+                chunks[x][z].neighbors[ChunkDirection::Left] = Arc::downgrade(&chunks[x][z + 1].cubes);
             }
         }
+    }
+
+    let mesh_descs: Vec<(Mesh, f32, f32)> = (0..chunks_to_spawn)
+        .into_par_iter()
+        .map(|x| {
+            (0..chunks_to_spawn)
+                .into_iter()
+                .map(|z| {
+                    let chunk_x = x as f32 * CHUNK_SIZE as f32 * BLOCK_SIZE;
+                    let chunk_z = z as f32 * CHUNK_SIZE as f32 * BLOCK_SIZE;
+                    //TESTING
+                    {
+                        let _span = info_span!("span_name", name = "span_name").entered();
+                        apply_function_to_blocks(&chunks[x][z], update_dirt);
+                    }
+
+                    let _span = info_span!("create_mesh", name = "create_mesh").entered();
+                    (create_chunk_mesh(&chunks[x][z]), chunk_x, chunk_z)
+                })
+                .collect::<Vec<_>>()
+        })
+        .flatten()
+        .collect();
+
+    for mesh_desc in mesh_descs {
+        commands.spawn_bundle(MaterialMeshBundle {
+            mesh: meshes.add(mesh_desc.0),
+            material: materials.add(CustomMaterial {
+                textures: server.load("test_texture.png"),
+            }),
+            transform: Transform::from_xyz(mesh_desc.1, 0.0, mesh_desc.2),
+            ..default()
+        });
     }
 }
 
