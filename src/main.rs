@@ -22,8 +22,8 @@ mod material;
 #[derive(Component)]
 pub struct FollowCamera;
 
-pub const CHUNK_SIZE: usize = 16;
-pub const WORLD_SIZE: usize = 10;
+pub const CHUNK_SIZE: usize = 24;
+pub const WORLD_SIZE: usize = 24;
 pub const MAX_CHUNK_UPDATES_PER_FRAME: usize = 10;
 pub const BLOCK_SIZE: f32 = 0.5;
 
@@ -152,7 +152,7 @@ impl Default for Chunk {
     fn default() -> Chunk {
         Chunk {
             cubes: [[[Block::Air; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE],
-            dirty: true,
+            dirty: false,
             neighbors: [
                 Weak::new(),
                 Weak::new(),
@@ -184,8 +184,11 @@ fn update_dirty_chunks(mut chunks: Query<(&ChunkComp, &mut Handle<Mesh>)>, mut m
 
 fn update_dirt_sys(chunks: Query<&ChunkComp>, input: Res<Input<KeyCode>>) {
     if input.just_pressed(KeyCode::Space) {
+        //for chunk in &chunks {
+        //apply_function_to_blocks(&mut chunk.chunk.write().unwrap(), update_dirt);
+        //}
         chunks.par_for_each(5, |chunk| {
-            apply_function_to_blocks(&mut chunk.chunk.write().unwrap(), update_dirt);
+            apply_function_to_blocks(chunk, update_dirt);
         });
     }
 }
@@ -217,16 +220,20 @@ fn main() {
         .run();
 }
 
-fn apply_function_to_blocks<F>(chunk: &mut Chunk, mut function: F)
+fn apply_function_to_blocks<F>(chunk: &ChunkComp, mut function: F)
 where
     F: FnMut(&mut Block, [Option<Block>; 6]) -> bool,
 {
     for z in 0..CHUNK_SIZE as isize {
         for y in 0..CHUNK_SIZE as isize {
             for x in 0..CHUNK_SIZE as isize {
-                let neighbors = chunk.get_block_neighbors(x, y, z);
-                if function(&mut chunk.cubes[x as usize][y as usize][z as usize], neighbors) {
-                    chunk.dirty = true;
+                let neighbors = chunk.chunk.read().unwrap().get_block_neighbors(x, y, z);
+                //No deadlocks because only write when you know you are done reading
+                if function(
+                    &mut chunk.chunk.write().unwrap().cubes[x as usize][y as usize][z as usize],
+                    neighbors,
+                ) {
+                    chunk.chunk.write().unwrap().dirty = true;
                 }
             }
         }
