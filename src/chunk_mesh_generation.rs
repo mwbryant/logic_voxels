@@ -65,12 +65,8 @@ fn create_mesh_faces(chunk: &Chunk, mesh_description: &mut MeshDescription) {
         for y in 0..CHUNK_SIZE as isize {
             for x in 0..CHUNK_SIZE as isize {
                 let current_block = chunk.get_block(x, y, z).unwrap();
-                let front_block = chunk.get_block(x + 1, y, z);
-                let back_block = chunk.get_block(x - 1, y, z);
-                let left_block = chunk.get_block(x, y, z + 1);
-                let right_block = chunk.get_block(x, y, z - 1);
-                let top_block = chunk.get_block(x, y + 1, z);
-                let bottom_block = chunk.get_block(x, y - 1, z);
+                let [front_block, back_block, left_block, right_block, top_block, bottom_block] =
+                    chunk.get_block_neighbors(x, y, z);
                 if current_block.is_filled() && (front_block.is_none() || !front_block.unwrap().is_filled()) {
                     add_face(
                         mesh_description,

@@ -2,7 +2,9 @@ use rayon::iter::ParallelIterator;
 use std::{
     borrow::Borrow,
     cell::RefCell,
+    char::MAX,
     ops::{Index, IndexMut},
+    rc::Rc,
     sync::{Arc, Mutex, RwLock, Weak},
 };
 
@@ -20,8 +22,10 @@ mod material;
 #[derive(Component)]
 pub struct FollowCamera;
 
-pub const CHUNK_SIZE: usize = 24;
-pub const BLOCK_SIZE: f32 = 0.3;
+pub const CHUNK_SIZE: usize = 16;
+pub const WORLD_SIZE: usize = 100;
+pub const MAX_CHUNK_UPDATES_PER_FRAME: usize = 10;
+pub const BLOCK_SIZE: f32 = 0.5;
 
 #[derive(Clone, Copy)]
 pub enum ChunkDirection {
@@ -48,13 +52,17 @@ impl<T> IndexMut<ChunkDirection> for [T; 6] {
 }
 
 type ChunkData = RwLock<[[[Block; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]>;
+#[derive(Component, Clone)]
+pub struct ChunkComp {
+    chunk: Arc<RwLock<Chunk>>,
+}
 
 //TODO serialize?
 //PERF there has to be a more performant way of handling this
-#[derive(Component)]
+//#[derive(Component, Clone)]
 pub struct Chunk {
-    cubes: Arc<ChunkData>,
-    dirty: Mutex<bool>,
+    cubes: ChunkData>,
+    dirty: RwLock<bool>>,
     neighbors: [Weak<ChunkData>; 6],
 }
 
@@ -97,6 +105,18 @@ impl Chunk {
         }
     }
 
+    pub fn get_block_neighbors(&self, x: isize, y: isize, z: isize) -> [Option<Block>; 6] {
+        let mut block_neighbors = [None; 6];
+        //Front
+        block_neighbors[ChunkDirection::Front] = self.get_block(x + 1, y, z);
+        block_neighbors[ChunkDirection::Back] = self.get_block(x - 1, y, z);
+        block_neighbors[ChunkDirection::Left] = self.get_block(x, y, z + 1);
+        block_neighbors[ChunkDirection::Right] = self.get_block(x, y, z - 1);
+        block_neighbors[ChunkDirection::Top] = self.get_block(x, y + 1, z);
+        block_neighbors[ChunkDirection::Bottom] = self.get_block(x, y - 1, z);
+        block_neighbors
+    }
+
     fn index_inbounds(index: isize) -> bool {
         index >= 0 && index < CHUNK_SIZE as isize
     }
@@ -132,7 +152,7 @@ impl Default for Chunk {
     fn default() -> Chunk {
         Chunk {
             cubes: Arc::new(RwLock::new([[[Block::Air; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE])),
-            dirty: Mutex::new(false),
+            dirty: Arc::new(RwLock::new(false)),
             neighbors: [
                 Weak::new(),
                 Weak::new(),
@@ -145,7 +165,29 @@ impl Default for Chunk {
     }
 }
 
-fn update_dirty_chunks() {}
+fn update_dirty_chunks(mut chunks: Query<(&Chunk, &mut Handle<Mesh>)>, mut meshes: ResMut<Assets<Mesh>>) {
+    //TODO all of this can be done in parallel except for adding mesh to assets
+    //FIXME for now I'm just going to cap the number of chunk updates per frame
+    let mut updates = 0;
+    for (chunk, mut mesh) in &mut chunks {
+        if *chunk.dirty.read().unwrap() {
+            *mesh = meshes.add(create_chunk_mesh(chunk));
+            updates += 1;
+            *chunk.dirty.write().unwrap() = false;
+        }
+        if updates > MAX_CHUNK_UPDATES_PER_FRAME {
+            return;
+        }
+    }
+}
+
+fn update_dirt_sys(chunks: Query<&Chunk>, input: Res<Input<KeyCode>>) {
+    if input.just_pressed(KeyCode::Space) {
+        chunks.par_for_each(5, |chunk| {
+            apply_function_to_blocks(chunk, update_dirt);
+        });
+    }
+}
 
 fn main() {
     App::new()
@@ -169,6 +211,8 @@ fn main() {
         .add_startup_system(spawn_camera)
         .add_startup_system(spawn_custom_mesh)
         .add_system(camera_follow)
+        .add_system(update_dirt_sys)
+        .add_system(update_dirty_chunks)
         .run();
 }
 
@@ -179,19 +223,12 @@ where
     for z in 0..CHUNK_SIZE as isize {
         for y in 0..CHUNK_SIZE as isize {
             for x in 0..CHUNK_SIZE as isize {
-                let mut block_neighbors = [None; 6];
-                //Front
-                block_neighbors[ChunkDirection::Front] = chunk.get_block(x + 1, y, z);
-                block_neighbors[ChunkDirection::Back] = chunk.get_block(x - 1, y, z);
-                block_neighbors[ChunkDirection::Left] = chunk.get_block(x, y, z + 1);
-                block_neighbors[ChunkDirection::Right] = chunk.get_block(x, y, z - 1);
-                block_neighbors[ChunkDirection::Top] = chunk.get_block(x, y + 1, z);
-                block_neighbors[ChunkDirection::Bottom] = chunk.get_block(x, y - 1, z);
+                let neighbors = chunk.get_block_neighbors(x, y, z);
                 if function(
                     &mut chunk.cubes.clone().write().unwrap()[x as usize][y as usize][z as usize],
-                    block_neighbors,
+                    neighbors,
                 ) {
-                    *chunk.dirty.lock().unwrap() = true;
+                    *chunk.dirty.write().unwrap() = true;
                 }
             }
         }
@@ -201,7 +238,6 @@ where
 fn update_dirt(block: &mut Block, neighbors: [Option<Block>; 6]) -> bool {
     if matches!(block, Block::Grass) {
         if let Some(top) = neighbors[ChunkDirection::Top] {
-            //info!("Dirt {:?}", top);
             if !matches!(top, Block::Air) {
                 *block = Block::Dirt;
                 return true;
@@ -254,7 +290,7 @@ fn spawn_custom_mesh(
     mut meshes: ResMut<Assets<Mesh>>,
     server: Res<AssetServer>,
 ) {
-    let chunks_to_spawn = 5;
+    let chunks_to_spawn = WORLD_SIZE;
     //FIXME dont use a vec for this
     let mut chunks: Vec<Vec<Chunk>> = Vec::default();
 
@@ -285,7 +321,7 @@ fn spawn_custom_mesh(
         }
     }
 
-    let mesh_descs: Vec<(Mesh, f32, f32)> = (0..chunks_to_spawn)
+    let mesh_descs: Vec<(Mesh, f32, f32, Chunk)> = (0..chunks_to_spawn)
         .into_par_iter()
         .map(|x| {
             (0..chunks_to_spawn)
@@ -296,11 +332,11 @@ fn spawn_custom_mesh(
                     //TESTING
                     {
                         let _span = info_span!("span_name", name = "span_name").entered();
-                        apply_function_to_blocks(&chunks[x][z], update_dirt);
+                        //apply_function_to_blocks(&chunks[x][z], update_dirt);
                     }
 
                     let _span = info_span!("create_mesh", name = "create_mesh").entered();
-                    (create_chunk_mesh(&chunks[x][z]), chunk_x, chunk_z)
+                    (create_chunk_mesh(&chunks[x][z]), chunk_x, chunk_z, chunks[x][z].clone())
                 })
                 .collect::<Vec<_>>()
         })
@@ -308,14 +344,17 @@ fn spawn_custom_mesh(
         .collect();
 
     for mesh_desc in mesh_descs {
-        commands.spawn_bundle(MaterialMeshBundle {
-            mesh: meshes.add(mesh_desc.0),
-            material: materials.add(CustomMaterial {
-                textures: server.load("test_texture.png"),
-            }),
-            transform: Transform::from_xyz(mesh_desc.1, 0.0, mesh_desc.2),
-            ..default()
-        });
+        commands
+            .spawn_bundle(MaterialMeshBundle {
+                mesh: meshes.add(mesh_desc.0),
+                material: materials.add(CustomMaterial {
+                    textures: server.load("test_texture.png"),
+                }),
+                transform: Transform::from_xyz(mesh_desc.1, 0.0, mesh_desc.2),
+
+                ..default()
+            })
+            .insert(mesh_desc.3);
     }
 }
 
