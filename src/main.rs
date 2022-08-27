@@ -1,21 +1,19 @@
-use rayon::iter::ParallelIterator;
 use std::{
-    borrow::Borrow,
-    cell::RefCell,
-    char::MAX,
     ops::{Index, IndexMut},
-    rc::Rc,
-    sync::{Arc, Mutex, RwLock, Weak},
+    sync::{Arc, RwLock, Weak},
 };
 
 use bevy::{asset::AssetServerSettings, prelude::*, render::texture::ImageSettings, window::PresentMode};
 use bevy_flycam::{FlyCam, NoCameraPlayerPlugin};
 use bevy_inspector_egui::WorldInspectorPlugin;
+use block::Block;
+use chunk::{Chunk, ChunkComp, ChunkDirection};
 use chunk_mesh_generation::create_chunk_mesh;
 use material::CustomMaterial;
 use noise::{NoiseFn, Perlin};
-use rayon::prelude::IntoParallelIterator;
 
+mod block;
+mod chunk;
 mod chunk_mesh_generation;
 mod material;
 
@@ -26,144 +24,6 @@ pub const CHUNK_SIZE: usize = 24;
 pub const WORLD_SIZE: usize = 24;
 pub const MAX_CHUNK_UPDATES_PER_FRAME: usize = 10;
 pub const BLOCK_SIZE: f32 = 0.5;
-
-#[derive(Clone, Copy)]
-pub enum ChunkDirection {
-    Front = 0,  // x + 1
-    Back = 1,   // x - 1
-    Left = 2,   // z + 1
-    Right = 3,  // z - 1
-    Top = 4,    // y + 1
-    Bottom = 5, // y - 1
-}
-
-impl<T> Index<ChunkDirection> for [T; 6] {
-    type Output = T;
-
-    fn index(&self, index: ChunkDirection) -> &Self::Output {
-        &self[index as usize]
-    }
-}
-
-impl<T> IndexMut<ChunkDirection> for [T; 6] {
-    fn index_mut(&mut self, index: ChunkDirection) -> &mut Self::Output {
-        &mut self[index as usize]
-    }
-}
-
-type ChunkData = [[[Block; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE];
-#[derive(Component, Clone)]
-pub struct ChunkComp {
-    chunk: Arc<RwLock<Chunk>>,
-}
-
-//TODO serialize?
-//PERF there has to be a more performant way of handling this
-#[derive(Clone)]
-pub struct Chunk {
-    cubes: ChunkData,
-    dirty: bool,
-    neighbors: [Weak<RwLock<Chunk>>; 6],
-}
-
-impl Chunk {
-    pub fn get_block(&self, x: isize, y: isize, z: isize) -> Option<Block> {
-        if Self::index_inbounds(x) && Self::index_inbounds(y) && Self::index_inbounds(z) {
-            Some(self.cubes[x as usize][y as usize][z as usize])
-        } else if x < 0 {
-            assert!(Self::index_inbounds(y) && Self::index_inbounds(z));
-            self.neighbors[ChunkDirection::Back]
-                .upgrade()
-                .map(|back| back.read().unwrap().cubes[CHUNK_SIZE - 1][y as usize][z as usize])
-        } else if x >= CHUNK_SIZE as isize {
-            assert!(Self::index_inbounds(y) && Self::index_inbounds(z));
-            self.neighbors[ChunkDirection::Front]
-                .upgrade()
-                .map(|front| front.read().unwrap().cubes[0][y as usize][z as usize])
-        } else if z < 0 {
-            assert!(Self::index_inbounds(x) && Self::index_inbounds(y));
-            self.neighbors[ChunkDirection::Right]
-                .upgrade()
-                .map(|front| front.read().unwrap().cubes[x as usize][y as usize][CHUNK_SIZE - 1])
-        } else if z >= CHUNK_SIZE as isize {
-            assert!(Self::index_inbounds(x) && Self::index_inbounds(y));
-            self.neighbors[ChunkDirection::Left]
-                .upgrade()
-                .map(|back| back.read().unwrap().cubes[x as usize][y as usize][0])
-        } else if y < 0 {
-            assert!(Self::index_inbounds(x) && Self::index_inbounds(z));
-            self.neighbors[ChunkDirection::Bottom]
-                .upgrade()
-                .map(|bottom| bottom.read().unwrap().cubes[x as usize][CHUNK_SIZE - 1][z as usize])
-        } else if y >= CHUNK_SIZE as isize {
-            assert!(Self::index_inbounds(x) && Self::index_inbounds(z));
-            self.neighbors[ChunkDirection::Top]
-                .upgrade()
-                .map(|top| top.read().unwrap().cubes[x as usize][0][z as usize])
-        } else {
-            None
-        }
-    }
-
-    pub fn get_block_neighbors(&self, x: isize, y: isize, z: isize) -> [Option<Block>; 6] {
-        let mut block_neighbors = [None; 6];
-        //Front
-        block_neighbors[ChunkDirection::Front] = self.get_block(x + 1, y, z);
-        block_neighbors[ChunkDirection::Back] = self.get_block(x - 1, y, z);
-        block_neighbors[ChunkDirection::Left] = self.get_block(x, y, z + 1);
-        block_neighbors[ChunkDirection::Right] = self.get_block(x, y, z - 1);
-        block_neighbors[ChunkDirection::Top] = self.get_block(x, y + 1, z);
-        block_neighbors[ChunkDirection::Bottom] = self.get_block(x, y - 1, z);
-        block_neighbors
-    }
-
-    fn index_inbounds(index: isize) -> bool {
-        index >= 0 && index < CHUNK_SIZE as isize
-    }
-}
-
-impl Block {
-    fn is_filled(&self) -> bool {
-        !matches!(self, Block::Air)
-    }
-
-    fn get_face_index(&self, direction: ChunkDirection) -> u32 {
-        match self {
-            Block::Air => 0,
-            Block::Grass => match direction {
-                ChunkDirection::Front | ChunkDirection::Back | ChunkDirection::Left | ChunkDirection::Right => 1,
-                ChunkDirection::Top => 0,
-                ChunkDirection::Bottom => 2,
-            },
-            Block::Dirt => 2,
-        }
-    }
-}
-
-#[derive(Default, Clone, Copy, Debug)]
-pub enum Block {
-    #[default]
-    Air,
-    Grass,
-    Dirt,
-}
-
-impl Default for Chunk {
-    fn default() -> Chunk {
-        Chunk {
-            cubes: [[[Block::Air; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE],
-            dirty: false,
-            neighbors: [
-                Weak::new(),
-                Weak::new(),
-                Weak::new(),
-                Weak::new(),
-                Weak::new(),
-                Weak::new(),
-            ],
-        }
-    }
-}
 
 fn update_dirty_chunks(mut chunks: Query<(&ChunkComp, &mut Handle<Mesh>)>, mut meshes: ResMut<Assets<Mesh>>) {
     //TODO all of this can be done in parallel except for adding mesh to assets
@@ -176,7 +36,6 @@ fn update_dirty_chunks(mut chunks: Query<(&ChunkComp, &mut Handle<Mesh>)>, mut m
             chunk.chunk.write().unwrap().dirty = false;
         }
         if updates > MAX_CHUNK_UPDATES_PER_FRAME {
-            info!("too many dirty chunks");
             return;
         }
     }
@@ -184,9 +43,6 @@ fn update_dirty_chunks(mut chunks: Query<(&ChunkComp, &mut Handle<Mesh>)>, mut m
 
 fn update_dirt_sys(chunks: Query<&ChunkComp>, input: Res<Input<KeyCode>>) {
     if input.just_pressed(KeyCode::Space) {
-        //for chunk in &chunks {
-        //apply_function_to_blocks(&mut chunk.chunk.write().unwrap(), update_dirt);
-        //}
         chunks.par_for_each(5, |chunk| {
             apply_function_to_blocks(chunk, update_dirt);
         });
@@ -288,7 +144,6 @@ fn gen_chunk(chunk_x: f32, chunk_z: f32) -> Chunk {
     chunk
 }
 
-#[allow(clippy::needless_range_loop)]
 fn spawn_custom_mesh(
     mut commands: Commands,
     mut materials: ResMut<Assets<CustomMaterial>>,

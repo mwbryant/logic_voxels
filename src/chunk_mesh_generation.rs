@@ -58,8 +58,6 @@ pub fn create_chunk_mesh(chunk: &Chunk) -> Mesh {
     mesh
 }
 
-//Clippy is angry but I am going to add more to the if clauses soon and the suggestions are less clear
-#[allow(clippy::nonminimal_bool)]
 fn create_mesh_faces(chunk: &Chunk, mesh_description: &mut MeshDescription) {
     for z in 0..CHUNK_SIZE as isize {
         for y in 0..CHUNK_SIZE as isize {
