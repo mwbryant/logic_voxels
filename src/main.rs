@@ -1,5 +1,4 @@
 use std::{
-    ops::{Index, IndexMut},
     sync::{Arc, RwLock, Weak},
 };
 
@@ -21,7 +20,7 @@ mod material;
 pub struct FollowCamera;
 
 pub const CHUNK_SIZE: usize = 24;
-pub const WORLD_SIZE: usize = 24;
+pub const WORLD_SIZE: usize = 6;
 pub const MAX_CHUNK_UPDATES_PER_FRAME: usize = 10;
 pub const BLOCK_SIZE: f32 = 0.5;
 
@@ -55,7 +54,7 @@ fn main() {
         .insert_resource(WindowDescriptor {
             width: 1280.,
             height: 720.,
-            title: "Bevy Template".to_string(),
+            title: "Voxel Tests".to_string(),
             present_mode: PresentMode::Immediate,
             resizable: false,
             ..Default::default()

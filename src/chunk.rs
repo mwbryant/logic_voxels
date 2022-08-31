@@ -7,6 +7,9 @@ use bevy::prelude::*;
 
 use crate::{block::Block, CHUNK_SIZE};
 
+//FIXME make chunk not pub and only expose methods
+// That avoid deadlocks
+// Ie only write when you know you'll finish
 #[derive(Component, Clone)]
 pub struct ChunkComp {
     pub chunk: Arc<RwLock<Chunk>>,
