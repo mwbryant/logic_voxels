@@ -10,6 +10,11 @@ use bevy::{
     },
 };
 
+pub const CUSTOM_UV: MeshVertexAttribute = MeshVertexAttribute::new("CustomUV", 52894552143, VertexFormat::Uint8x2);
+
+pub const CUSTOM_NORMAL: MeshVertexAttribute =
+    MeshVertexAttribute::new("CutsomNormal", 1374029579328, VertexFormat::Uint8x2);
+
 pub const ATTRIBUTE_TEXTURE_INDEX: MeshVertexAttribute =
     MeshVertexAttribute::new("TextureIndex", 15092354854, VertexFormat::Uint32);
 
@@ -37,10 +42,13 @@ impl Material for CustomMaterial {
     ) -> Result<(), SpecializedMeshPipelineError> {
         let vertex_layout = layout.get_layout(&[
             Mesh::ATTRIBUTE_POSITION.at_shader_location(0),
-            Mesh::ATTRIBUTE_NORMAL.at_shader_location(1),
-            Mesh::ATTRIBUTE_UV_0.at_shader_location(2),
+            //FIXME we don't need this level of detail for normals
+            CUSTOM_NORMAL.at_shader_location(1),
+            //FIXME we dont need uvs, just a vertex id
+            CUSTOM_UV.at_shader_location(2),
             ATTRIBUTE_TEXTURE_INDEX.at_shader_location(3),
-        ])?;
+        ]);
+        let vertex_layout = vertex_layout.unwrap();
         descriptor.vertex.buffers = vec![vertex_layout];
         Ok(())
     }

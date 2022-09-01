@@ -1,6 +1,4 @@
-use std::{
-    sync::{Arc, RwLock, Weak},
-};
+use std::sync::{Arc, RwLock, Weak};
 
 use bevy::{asset::AssetServerSettings, prelude::*, render::texture::ImageSettings, window::PresentMode};
 use bevy_flycam::{FlyCam, NoCameraPlayerPlugin};
@@ -20,7 +18,7 @@ mod material;
 pub struct FollowCamera;
 
 pub const CHUNK_SIZE: usize = 24;
-pub const WORLD_SIZE: usize = 6;
+pub const WORLD_SIZE: usize = 10;
 pub const MAX_CHUNK_UPDATES_PER_FRAME: usize = 10;
 pub const BLOCK_SIZE: f32 = 0.5;
 
@@ -163,6 +161,8 @@ fn spawn_custom_mesh(
         }
     }
 
+    info!("Part 1");
+
     //let mut arcs: [[Weak<_>; WORLD_SIZE]; WORLD_SIZE] = Default::default();
     let mut arcs = [(); WORLD_SIZE].map(|_| [(); WORLD_SIZE].map(|_| <Arc<_>>::default()));
     let mut weaks = [(); WORLD_SIZE].map(|_| [(); WORLD_SIZE].map(|_| <Weak<_>>::default()));
@@ -174,6 +174,8 @@ fn spawn_custom_mesh(
             weaks[x][z] = Arc::downgrade(&arcs[x][z]);
         }
     }
+
+    info!("Part 2");
 
     //link chunk neighbors
     for x in 0..chunks_to_spawn {
@@ -192,6 +194,8 @@ fn spawn_custom_mesh(
             }
         }
     }
+
+    info!("Part 3");
 
     for x in 0..chunks_to_spawn {
         for z in 0..chunks_to_spawn {
@@ -213,6 +217,7 @@ fn spawn_custom_mesh(
                 });
         }
     }
+    info!("Done");
 }
 
 fn spawn_camera(mut commands: Commands) {

@@ -1,9 +1,12 @@
 use std::f32::consts::PI;
 
-use crate::material::ATTRIBUTE_TEXTURE_INDEX;
+use crate::material::{ATTRIBUTE_TEXTURE_INDEX, CUSTOM_NORMAL, CUSTOM_UV};
 use bevy::{
     prelude::*,
-    render::{mesh::Indices, render_resource::PrimitiveTopology},
+    render::{
+        mesh::{Indices, VertexAttributeValues},
+        render_resource::PrimitiveTopology,
+    },
 };
 
 use crate::{Chunk, ChunkDirection, BLOCK_SIZE, CHUNK_SIZE};
@@ -11,8 +14,8 @@ use crate::{Chunk, ChunkDirection, BLOCK_SIZE, CHUNK_SIZE};
 #[derive(Default)]
 pub struct MeshDescription {
     verts: Vec<Vec3>,
-    normals: Vec<Vec3>,
-    uvs: Vec<Vec2>,
+    normals: Vec<[u8; 2]>,
+    uvs: Vec<[u8; 2]>,
     texture_indices: Vec<u32>,
     vert_indicies: Vec<usize>,
 }
@@ -30,23 +33,20 @@ pub fn create_chunk_mesh(chunk: &Chunk) -> Mesh {
             .map(|vec| vec.to_array())
             .collect::<Vec<[f32; 3]>>(),
     );
+
     mesh.insert_attribute(
         Mesh::ATTRIBUTE_NORMAL,
         description
-            .normals
+            .verts
             .iter()
             .map(|vec| vec.to_array())
             .collect::<Vec<[f32; 3]>>(),
     );
 
-    mesh.insert_attribute(
-        Mesh::ATTRIBUTE_UV_0,
-        description
-            .uvs
-            .iter()
-            .map(|vec| vec.to_array())
-            .collect::<Vec<[f32; 2]>>(),
-    );
+    mesh.insert_attribute(CUSTOM_NORMAL, VertexAttributeValues::Uint8x2(description.normals));
+
+    mesh.insert_attribute(CUSTOM_UV, VertexAttributeValues::Uint8x2(description.uvs));
+
     mesh.insert_attribute(ATTRIBUTE_TEXTURE_INDEX, description.texture_indices);
     mesh.set_indices(Some(Indices::U32(
         description
@@ -151,6 +151,7 @@ fn add_face(mesh_description: &mut MeshDescription, rotation: Quat, transform: V
         Vec3::new(BLOCK_SIZE / 2.0, BLOCK_SIZE / 2.0, 0.0),
         Vec3::new(-BLOCK_SIZE / 2.0, BLOCK_SIZE / 2.0, 0.0),
     ];
+
     let mut new_normals = [
         Vec3::new(0.0, 0.0, 1.0),
         Vec3::new(0.0, 0.0, 1.0),
@@ -160,23 +161,45 @@ fn add_face(mesh_description: &mut MeshDescription, rotation: Quat, transform: V
 
     let new_texture_indices = [face_index; 4];
 
-    let new_uvs = [
-        Vec2::new(0.01, 0.99),
-        Vec2::new(0.99, 0.99),
-        Vec2::new(0.99, 0.01),
-        Vec2::new(0.01, 0.01),
-    ];
+    //let new_uvs = [
+    //Vec2::new(0.01, 0.99),
+    //Vec2::new(0.99, 0.99),
+    //Vec2::new(0.99, 0.01),
+    //Vec2::new(0.01, 0.01),
+    //];
+    let new_uvs = [[0, 1], [1, 1], [1, 0], [0, 0]];
 
     new_verts
         .iter_mut()
         .for_each(|vec| *vec = (rotation * *vec) + transform);
     new_normals.iter_mut().for_each(|vec| *vec = rotation * *vec);
-    //info!("{}", new_normals[1]);
+
+    let normals = new_normals
+        .iter()
+        .map(|norm| {
+            if norm.x > 0.5 {
+                [0, 1]
+            } else if norm.x < 0.5 {
+                [0, 2]
+            } else if norm.y > 0.5 {
+                [0, 3]
+            } else if norm.y < 0.5 {
+                [0, 4]
+            } else if norm.z > 0.5 {
+                [0, 5]
+            } else if norm.z < 0.5 {
+                [0, 6]
+            } else {
+                [0, 0]
+            }
+        })
+        .collect::<Vec<[u8; 2]>>();
 
     let vert_start = mesh_description.verts.len();
     mesh_description.verts.extend_from_slice(&new_verts);
-    mesh_description.normals.extend_from_slice(&new_normals);
+    mesh_description.normals.extend_from_slice(&normals);
     mesh_description.uvs.extend_from_slice(&new_uvs);
+
     mesh_description.texture_indices.extend_from_slice(&new_texture_indices);
 
     mesh_description
