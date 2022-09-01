@@ -1,6 +1,9 @@
 use std::f32::consts::PI;
 
-use crate::material::{ATTRIBUTE_TEXTURE_INDEX, CUSTOM_NORMAL, CUSTOM_UV};
+use crate::{
+    block::Block,
+    material::{ATTRIBUTE_TEXTURE_INDEX, CUSTOM_NORMAL, CUSTOM_UV},
+};
 use bevy::{
     prelude::*,
     render::{
@@ -58,7 +61,89 @@ pub fn create_chunk_mesh(chunk: &Chunk) -> Mesh {
     mesh
 }
 
+#[derive(Default, Copy, Clone)]
+pub struct Sheet {
+    blocks: [[Block; CHUNK_SIZE]; CHUNK_SIZE],
+}
+
+fn create_greedy_face(block: Block, x: usize, y:usize, width:usize, height: usize, desc: &mut MeshDescription) {
+    //TODO
+}
+
+fn greedy(sheet: &Sheet) -> MeshDescription {
+    let mut desc = MeshDescription::default();
+    let mut finished = [[false; CHUNK_SIZE]; CHUNK_SIZE];
+
+    for x in 0..CHUNK_SIZE {
+        for y in 0..CHUNK_SIZE {
+            finished[x][y] = !sheet.blocks[x][y].is_filled();
+        }
+    }
+
+    //gross
+    while finished.iter().flatten().collect::<Vec<&bool>>().contains(&&false) {
+        for x in 0..CHUNK_SIZE {
+            for y in 0..CHUNK_SIZE {
+                if finished[x][y] == false {
+                    //Starting point, walk x to get width
+                    let start = sheet.blocks[x][y];
+                    let mut width = 1;
+                    for w in x + 1..CHUNK_SIZE {
+                        if start == sheet.blocks[x + w][y] {
+                            width += 1;
+                        } else {
+                            break;
+                        }
+                    }
+                    //Now walk y to get height
+                    let mut height = 1;
+                    for h in y + 1..CHUNK_SIZE {
+                        let mut all_same = true;
+                        for w in x + 1..CHUNK_SIZE {
+                            if start != sheet.blocks[x + w][y + h] {
+                                all_same = false;
+                            }
+                        }
+                        if all_same {
+                            height += 1;
+                        } else {
+                            break;
+                        }
+                    }
+                    //Time to make the rect and mark finished
+                    for u in x..x + width {
+                        for v in y..y + height {
+                            create_greedy_face(start, x, y, width, height, &mut desc);
+                            finished[u][v] = true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    desc
+}
+
 fn create_mesh_faces(chunk: &Chunk, mesh_description: &mut MeshDescription) {
+    let mut top_slices = [Sheet::default(); CHUNK_SIZE];
+    for z in 0..CHUNK_SIZE as isize {
+        for y in 0..CHUNK_SIZE as isize {
+            for x in 0..CHUNK_SIZE as isize {
+                let current_block = chunk.get_block(x, y, z).unwrap();
+                let [front_block, back_block, left_block, right_block, top_block, bottom_block] =
+                    chunk.get_block_neighbors(x, y, z);
+                if current_block.is_filled() && (top_block.is_none() || !top_block.unwrap().is_filled()) {
+                    //Place top neighbor
+                    top_slices[z as usize].blocks[x as usize][y as usize] = current_block;
+                }
+            }
+        }
+        let desc = greedy(&top_slices[z as usize]);
+    }
+}
+
+fn create_mesh_faces_old(chunk: &Chunk, mesh_description: &mut MeshDescription) {
     for z in 0..CHUNK_SIZE as isize {
         for y in 0..CHUNK_SIZE as isize {
             for x in 0..CHUNK_SIZE as isize {

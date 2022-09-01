@@ -1,6 +1,12 @@
 use std::sync::{Arc, RwLock, Weak};
 
-use bevy::{asset::AssetServerSettings, prelude::*, render::texture::ImageSettings, window::PresentMode};
+use bevy::{
+    asset::AssetServerSettings,
+    pbr::wireframe::{Wireframe, WireframePlugin},
+    prelude::*,
+    render::texture::ImageSettings,
+    window::PresentMode,
+};
 use bevy_flycam::{FlyCam, NoCameraPlayerPlugin};
 use bevy_inspector_egui::WorldInspectorPlugin;
 use block::Block;
@@ -18,7 +24,7 @@ mod material;
 pub struct FollowCamera;
 
 pub const CHUNK_SIZE: usize = 24;
-pub const WORLD_SIZE: usize = 10;
+pub const WORLD_SIZE: usize = 4;
 pub const MAX_CHUNK_UPDATES_PER_FRAME: usize = 10;
 pub const BLOCK_SIZE: f32 = 0.5;
 
@@ -64,6 +70,7 @@ fn main() {
         .add_plugins(DefaultPlugins)
         .add_plugin(MaterialPlugin::<CustomMaterial>::default())
         .add_plugin(WorldInspectorPlugin::default())
+        .add_plugin(WireframePlugin)
         .add_plugin(NoCameraPlayerPlugin)
         .add_startup_system(spawn_camera)
         .add_startup_system(spawn_custom_mesh)
@@ -212,6 +219,7 @@ fn spawn_custom_mesh(
 
                     ..default()
                 })
+                .insert(Wireframe)
                 .insert(ChunkComp {
                     chunk: arcs[x][z].clone(),
                 });

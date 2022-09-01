@@ -24,6 +24,7 @@ pub struct CustomMaterial {
     #[texture(0)]
     #[sampler(1)]
     pub textures: Handle<Image>,
+    //FIXME save chunk position then change mesh attributes to use pos as int
 }
 
 impl Material for CustomMaterial {

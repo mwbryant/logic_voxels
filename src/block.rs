@@ -2,7 +2,7 @@ use bevy::prelude::*;
 
 use crate::chunk::ChunkDirection;
 
-#[derive(Default, Clone, Copy, Debug)]
+#[derive(Default, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Block {
     #[default]
     Air,

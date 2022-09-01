@@ -2,6 +2,15 @@
 	"version": "2.0.0",
 	"tasks": [
         {
+            "label": "cargo fmt",
+            "type": "shell",
+            "command": "~/.cargo/bin/cargo fmt", // note: full path to the cargo
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        },
+        {
             "label": "cargo run",
             "type": "shell",
             "command": "~/.cargo/bin/cargo fmt && ~/.cargo/bin/cargo run", // note: full path to the cargo
