@@ -1,4 +1,5 @@
 use std::{
+    f32::consts::PI,
     ops::{Index, IndexMut},
     sync::{Arc, RwLock, Weak},
 };
@@ -63,6 +64,18 @@ impl<T> Index<ChunkDirection> for [T; 6] {
 impl<T> IndexMut<ChunkDirection> for [T; 6] {
     fn index_mut(&mut self, index: ChunkDirection) -> &mut Self::Output {
         &mut self[index as usize]
+    }
+}
+impl ChunkDirection {
+    pub fn get_face_rotation(&self) -> Quat {
+        match self {
+            ChunkDirection::Front => Quat::from_axis_angle(Vec3::Y, PI / 2.0),
+            ChunkDirection::Back => Quat::from_axis_angle(Vec3::Y, -PI / 2.0),
+            ChunkDirection::Top => Quat::from_axis_angle(Vec3::X, -PI / 2.0),
+            ChunkDirection::Bottom => Quat::from_axis_angle(Vec3::X, PI / 2.0),
+            ChunkDirection::Left => Quat::from_axis_angle(Vec3::Y, 0.0),
+            ChunkDirection::Right => Quat::from_axis_angle(Vec3::Y, PI),
+        }
     }
 }
 

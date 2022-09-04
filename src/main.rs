@@ -23,7 +23,7 @@ mod material;
 #[derive(Component)]
 pub struct FollowCamera;
 
-pub const CHUNK_SIZE: usize = 25;
+pub const CHUNK_SIZE: usize = 12;
 pub const WORLD_SIZE: usize = 1;
 pub const MAX_CHUNK_UPDATES_PER_FRAME: usize = 10;
 pub const BLOCK_SIZE: f32 = 0.5;

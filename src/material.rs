@@ -51,6 +51,7 @@ impl Material for CustomMaterial {
         ]);
         let vertex_layout = vertex_layout.unwrap();
         descriptor.vertex.buffers = vec![vertex_layout];
+        descriptor.primitive.cull_mode = None;
         Ok(())
     }
 }
