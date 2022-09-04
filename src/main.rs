@@ -4,7 +4,10 @@ use bevy::{
     asset::AssetServerSettings,
     pbr::wireframe::{Wireframe, WireframePlugin},
     prelude::*,
-    render::texture::ImageSettings,
+    render::{
+        render_resource::{AddressMode, FilterMode, SamplerDescriptor},
+        texture::{ImageSampler, ImageSettings},
+    },
     window::PresentMode,
 };
 use bevy_flycam::{FlyCam, NoCameraPlayerPlugin};
@@ -12,7 +15,7 @@ use bevy_inspector_egui::WorldInspectorPlugin;
 use block::Block;
 use chunk::{Chunk, ChunkComp, ChunkDirection};
 use chunk_mesh_generation::create_chunk_mesh;
-use material::CustomMaterial;
+use material::{create_array_texture, CustomMaterial};
 use noise::{NoiseFn, Perlin};
 
 mod block;
@@ -23,10 +26,10 @@ mod material;
 #[derive(Component)]
 pub struct FollowCamera;
 
-pub const CHUNK_SIZE: usize = 12;
-pub const WORLD_SIZE: usize = 1;
+pub const CHUNK_SIZE: usize = 16;
+pub const WORLD_SIZE: usize = 200;
 pub const MAX_CHUNK_UPDATES_PER_FRAME: usize = 10;
-pub const BLOCK_SIZE: f32 = 0.5;
+pub const BLOCK_SIZE: f32 = 1.0;
 
 fn update_dirty_chunks(mut chunks: Query<(&ChunkComp, &mut Handle<Mesh>)>, mut meshes: ResMut<Assets<Mesh>>) {
     //TODO all of this can be done in parallel except for adding mesh to assets
@@ -54,7 +57,18 @@ fn update_dirt_sys(chunks: Query<&ChunkComp>, input: Res<Input<KeyCode>>) {
 
 fn main() {
     App::new()
-        .insert_resource(ImageSettings::default_nearest())
+        .insert_resource(ImageSettings {
+            default_sampler: SamplerDescriptor {
+                address_mode_u: AddressMode::Repeat,
+                /// How to deal with out of bounds accesses in the v (i.e. y) direction
+                address_mode_v: AddressMode::Repeat,
+                /// How to deal with out of bounds accesses in the w (i.e. z) direction
+                address_mode_w: AddressMode::Repeat,
+                mag_filter: FilterMode::Nearest,
+                min_filter: FilterMode::Nearest,
+                ..Default::default()
+            },
+        })
         .insert_resource(WindowDescriptor {
             width: 1280.,
             height: 720.,
@@ -73,6 +87,8 @@ fn main() {
         .add_plugin(WireframePlugin)
         .add_plugin(NoCameraPlayerPlugin)
         .add_startup_system(spawn_camera)
+        .add_system(create_array_texture)
+        .add_startup_system_to_stage(StartupStage::PreStartup, load_chunk_texture)
         .add_startup_system(spawn_custom_mesh)
         .add_system(camera_follow)
         .add_system(update_dirt_sys)
@@ -148,11 +164,17 @@ fn gen_chunk(chunk_x: f32, chunk_z: f32) -> Chunk {
     chunk
 }
 
+pub struct ChunkTexture(pub Handle<Image>);
+
+fn load_chunk_texture(mut commands: Commands, server: Res<AssetServer>) {
+    commands.insert_resource(ChunkTexture(server.load("array_test.png")));
+}
+
 fn spawn_custom_mesh(
     mut commands: Commands,
     mut materials: ResMut<Assets<CustomMaterial>>,
     mut meshes: ResMut<Assets<Mesh>>,
-    server: Res<AssetServer>,
+    texture: Res<ChunkTexture>,
 ) {
     let chunks_to_spawn = WORLD_SIZE;
     //FIXME dont use a vec for this
@@ -213,13 +235,13 @@ fn spawn_custom_mesh(
                     mesh: meshes.add(create_chunk_mesh(&chunks[x][z])),
                     //mesh: meshes.add(shape::Box::default().into()),
                     material: materials.add(CustomMaterial {
-                        textures: server.load("test_texture.png"),
+                        textures: texture.0.clone(),
                     }),
                     transform: Transform::from_xyz(chunk_x, 0.0, chunk_z),
 
                     ..default()
                 })
-                .insert(Wireframe)
+                //.insert(Wireframe)
                 .insert(ChunkComp {
                     chunk: arcs[x][z].clone(),
                 });

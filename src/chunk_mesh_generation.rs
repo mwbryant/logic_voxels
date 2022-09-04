@@ -124,7 +124,7 @@ fn create_greedy_face(
     //let transform = Vec3::new(x as f32, y as f32, z as f32);
     //new_verts.iter_mut().for_each(|vec| *vec = *vec + transform);
 
-    let new_uvs = [[0, 1], [1, 1], [1, 0], [0, 0]];
+    let new_uvs = [[0, height as u8], [width as u8, height as u8], [width as u8, 0], [0, 0]];
 
     let new_texture_indices = [block.get_face_index(dir); 4];
     let mut new_normals = [
@@ -223,7 +223,6 @@ fn greedy(sheet: &Sheet, dir: ChunkDirection, desc: &mut MeshDescription, z: usi
                         }
                     }
                     //Time to make the rect and mark finished
-                    println!("Face {} {} {} {}", x, y, width, height);
                     create_greedy_face(start, dir, x, y, z, width, height, desc);
                     for u in x..x + width {
                         for v in y..y + height {
@@ -269,7 +268,6 @@ fn create_mesh_faces(chunk: &Chunk, mesh_description: &mut MeshDescription) {
                 }
             }
         }
-        println!("{:?}", left_slices[z as usize].blocks);
     }
     for z in 0..CHUNK_SIZE as isize {
         greedy(
