@@ -10,7 +10,7 @@ opt-level = 1
 opt-level = 3
 
 [dependencies]
- bevy = {version = "0.8", features = ["dynamic", "filesystem_watcher"] }
+bevy = {version = "0.8", features = ["dynamic", "filesystem_watcher"] }
 #bevy = {version = "0.8"}
 bevy-inspector-egui = "0.12.1"
 bevy_flycam = "0.8"

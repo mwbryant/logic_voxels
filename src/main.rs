@@ -27,7 +27,7 @@ mod material;
 pub struct FollowCamera;
 
 pub const CHUNK_SIZE: usize = 16;
-pub const WORLD_SIZE: usize = 200;
+pub const WORLD_SIZE: usize = 15;
 pub const MAX_CHUNK_UPDATES_PER_FRAME: usize = 10;
 pub const BLOCK_SIZE: f32 = 1.0;
 
@@ -241,7 +241,7 @@ fn spawn_custom_mesh(
 
                     ..default()
                 })
-                //.insert(Wireframe)
+                .insert(Wireframe)
                 .insert(ChunkComp {
                     chunk: arcs[x][z].clone(),
                 });
