@@ -1,4 +1,5 @@
 #![allow(clippy::too_many_arguments)]
+
 use chunk_loading::{initial_chunk_spawning, spawn_chunk_meshes, LoadedChunks};
 use direction::Direction;
 
@@ -64,88 +65,33 @@ fn click_detection(
     loaded_chunks: Res<LoadedChunks>,
 ) {
     let transform = transform.single();
-    let range = 15.0;
+    let range = 9.0;
     if mouse.pressed(MouseButton::Left) {
         info!("Looking toward {:?}, {:?}", transform.translation, transform.forward());
         // https://www.geeksforgeeks.org/bresenhams-algorithm-for-3-d-line-drawing/
         let end = transform.translation + transform.forward() * range;
-        let start = transform.translation;
         let mut current = transform.translation;
-        let dir = transform.forward();
-        let xs = if dir.x > 0.0 { 1.0 } else { -1.0 };
-        let ys = if dir.y > 0.0 { 1.0 } else { -1.0 };
-        let zs = if dir.z > 0.0 { 1.0 } else { -1.0 };
+
         let diff = end - current;
-        let diff = diff.abs();
+
+        let steps = diff.abs().max_element().ceil() * 5.0;
+
+        let inc = diff / steps;
 
         let mut to_check = Vec::default();
-
-        //X is driving
-        if diff.x > diff.y && diff.x > diff.z {
-            let mut p1 = 2. * diff.y - diff.x;
-            let mut p2 = 2. * diff.z - diff.x;
-            while (start.x < end.x && current.x < end.x) || (start.x > end.x && current.x > end.x) {
-                //FIXME blocksize?
-                current.x += xs;
-                if p1 >= 0. {
-                    current.y += ys;
-                    p1 -= 2. * diff.x;
-                }
-                if p2 >= 0. {
-                    current.z += zs;
-                    p2 -= 2. * diff.x;
-                }
-                p1 += 2. * diff.y;
-                p2 += 2. * diff.z;
-                info!("Checking {}", current.as_ivec3());
-                to_check.push(current.as_ivec3());
-            }
-            //Y driving
-        } else if diff.y > diff.z && diff.y > diff.x {
-            let mut p1 = 2. * diff.x - diff.y;
-            let mut p2 = 2. * diff.z - diff.y;
-            while (start.y < end.y && current.y < end.y) || (start.y > end.y && current.y > end.y) {
-                //FIXME blocksize?
-                current.y += ys;
-                if p1 >= 0. {
-                    current.x += xs;
-                    p1 -= 2. * diff.y;
-                }
-                if p2 >= 0. {
-                    current.z += zs;
-                    p2 -= 2. * diff.y;
-                }
-                p1 += 2. * diff.x;
-                p2 += 2. * diff.z;
-                info!("Checking {}", current.as_ivec3());
-                to_check.push(current.as_ivec3());
-            }
-        //Z driving
-        } else {
-            let mut p1 = 2. * diff.x - diff.z;
-            let mut p2 = 2. * diff.y - diff.z;
-            while (start.z < end.z && current.z < end.z) || (start.z > end.z && current.z > end.z) {
-                //FIXME blocksize?
-                current.z += zs;
-                if p1 >= 0. {
-                    current.x += xs;
-                    p1 -= 2. * diff.z;
-                }
-                if p2 >= 0. {
-                    current.y += ys;
-                    p2 -= 2. * diff.z;
-                }
-                p1 += 2. * diff.x;
-                p2 += 2. * diff.y;
-                info!("Checking {}", current.as_ivec3());
-                to_check.push(current.as_ivec3());
-            }
+        for _i in 0..(steps as usize) {
+            let block_pos = current - Vec3::ONE / 2.0;
+            to_check.push(block_pos.round().as_ivec3());
+            current += inc;
         }
 
         for pos in to_check {
             let size = CHUNK_SIZE as i32;
             let offset = IVec3::new(pos.x.rem_euclid(size), pos.y.rem_euclid(size), pos.z.rem_euclid(size));
-            let chunk_pos = IVec3::new(pos.x / size, pos.y / size, pos.z / size);
+            let x = if pos.x >= 0 { pos.x / size } else { pos.x / size - 1 };
+            let y = if pos.y >= 0 { pos.y / size } else { pos.y / size - 1 };
+            let z = if pos.z >= 0 { pos.z / size } else { pos.z / size - 1 };
+            let chunk_pos = IVec3::new(x, y, z);
             if let Some(chunk) = loaded_chunks.arc_map.get(&chunk_pos) {
                 if let Some(chunk) = chunk.upgrade() {
                     info!(
@@ -158,8 +104,10 @@ fn click_detection(
                     if chunk.read().unwrap().cubes[offset.x as usize][offset.y as usize][offset.z as usize]
                         != Block::Air
                     {
+                        //Rewind for placement
+                        //TODO abstract over place and remove to update neighbors on remove and avoid write/unwrap everywhere
                         chunk.write().unwrap().cubes[offset.x as usize][offset.y as usize][offset.z as usize] =
-                            Block::Red;
+                            Block::Air;
                         chunk.write().unwrap().dirty = true;
                         return;
                     }

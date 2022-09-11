@@ -1,6 +1,7 @@
 use std::sync::{Arc, RwLock, Weak};
 
 use bevy::{
+    pbr::wireframe::Wireframe,
     prelude::*,
     tasks::{AsyncComputeTaskPool, Task},
     utils::HashMap,
@@ -161,17 +162,19 @@ pub fn spawn_chunk_meshes(
                 &spawned_this_frame,
             );
 
-            commands.entity(ent).insert_bundle(MaterialMeshBundle {
-                mesh: meshes.add(mesh),
-                //mesh: meshes.add(shape::Box::default().into()),
-                material: materials.add(CustomMaterial {
-                    textures: texture.0.clone(),
-                }),
-                transform: Transform::from_xyz(pos.x as f32, pos.y as f32, pos.z as f32),
+            commands
+                .entity(ent)
+                .insert_bundle(MaterialMeshBundle {
+                    mesh: meshes.add(mesh),
+                    //mesh: meshes.add(shape::Box::default().into()),
+                    material: materials.add(CustomMaterial {
+                        textures: texture.0.clone(),
+                    }),
+                    transform: Transform::from_xyz(pos.x as f32, pos.y as f32, pos.z as f32),
 
-                ..default()
-            });
-            //.insert(Wireframe)
+                    ..default()
+                })
+                .insert(Wireframe);
             spawned_this_frame.insert(ent, ChunkComp { chunk: arc });
 
             commands.entity(ent).remove::<CreateChunkTask>();
