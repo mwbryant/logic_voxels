@@ -1,34 +1,37 @@
-use std::sync::{Arc, RwLock, Weak};
+#![allow(clippy::too_many_arguments)]
+use chunk_loading::{initial_chunk_spawning, spawn_chunk_meshes, LoadedChunks};
+use direction::Direction;
 
 use bevy::{
     asset::AssetServerSettings,
-    pbr::wireframe::{Wireframe, WireframePlugin},
+    pbr::wireframe::WireframePlugin,
     prelude::*,
     render::{
         render_resource::{AddressMode, FilterMode, SamplerDescriptor},
-        texture::{ImageSampler, ImageSettings},
+        texture::ImageSettings,
     },
     window::PresentMode,
 };
 use bevy_flycam::{FlyCam, NoCameraPlayerPlugin};
 use bevy_inspector_egui::WorldInspectorPlugin;
 use block::Block;
-use chunk::{Chunk, ChunkComp, ChunkDirection};
+use chunk::{Chunk, ChunkComp};
 use chunk_mesh_generation::create_chunk_mesh;
 use material::{create_array_texture, CustomMaterial};
-use noise::{NoiseFn, Perlin};
 
 mod block;
 mod chunk;
+mod chunk_loading;
 mod chunk_mesh_generation;
+mod direction;
 mod material;
 
 #[derive(Component)]
 pub struct FollowCamera;
 
 pub const CHUNK_SIZE: usize = 16;
-pub const WORLD_SIZE: usize = 15;
-pub const MAX_CHUNK_UPDATES_PER_FRAME: usize = 10;
+pub const WORLD_SIZE: usize = 20;
+pub const MAX_CHUNK_UPDATES_PER_FRAME: usize = 30;
 pub const BLOCK_SIZE: f32 = 1.0;
 
 fn update_dirty_chunks(mut chunks: Query<(&ChunkComp, &mut Handle<Mesh>)>, mut meshes: ResMut<Assets<Mesh>>) {
@@ -60,9 +63,7 @@ fn main() {
         .insert_resource(ImageSettings {
             default_sampler: SamplerDescriptor {
                 address_mode_u: AddressMode::Repeat,
-                /// How to deal with out of bounds accesses in the v (i.e. y) direction
                 address_mode_v: AddressMode::Repeat,
-                /// How to deal with out of bounds accesses in the w (i.e. z) direction
                 address_mode_w: AddressMode::Repeat,
                 mag_filter: FilterMode::Nearest,
                 min_filter: FilterMode::Nearest,
@@ -83,13 +84,15 @@ fn main() {
         })
         .add_plugins(DefaultPlugins)
         .add_plugin(MaterialPlugin::<CustomMaterial>::default())
-        .add_plugin(WorldInspectorPlugin::default())
+        //.add_plugin(WorldInspectorPlugin::default())
         .add_plugin(WireframePlugin)
         .add_plugin(NoCameraPlayerPlugin)
         .add_startup_system(spawn_camera)
         .add_system(create_array_texture)
+        .add_system(spawn_chunk_meshes)
+        .init_resource::<LoadedChunks>()
         .add_startup_system_to_stage(StartupStage::PreStartup, load_chunk_texture)
-        .add_startup_system(spawn_custom_mesh)
+        .add_startup_system(initial_chunk_spawning)
         .add_system(camera_follow)
         .add_system(update_dirt_sys)
         .add_system(update_dirty_chunks)
@@ -118,7 +121,7 @@ where
 
 fn update_dirt(block: &mut Block, neighbors: [Option<Block>; 6]) -> bool {
     if matches!(block, Block::Grass) {
-        if let Some(top) = neighbors[ChunkDirection::Top] {
+        if let Some(top) = neighbors[Direction::Top] {
             if !matches!(top, Block::Air) {
                 *block = Block::Dirt;
                 return true;
@@ -137,117 +140,10 @@ fn camera_follow(
     }
 }
 
-fn gen_chunk(chunk_x: f32, chunk_z: f32) -> Chunk {
-    let mut chunk = Chunk::default();
-    let perlin = Perlin::new();
-
-    for z in 0..CHUNK_SIZE {
-        for x in 0..CHUNK_SIZE {
-            for y in 0..CHUNK_SIZE {
-                let value = (perlin.get([
-                    (x as f64 * BLOCK_SIZE as f64 + chunk_x as f64) / 21.912,
-                    (z as f64 * BLOCK_SIZE as f64 + chunk_z as f64) / 23.253,
-                ]) + 1.0)
-                    / 2.0
-                    + (0.12
-                        * perlin.get([
-                            (x as f64 * BLOCK_SIZE as f64 + chunk_x as f64) / 3.912,
-                            (z as f64 * BLOCK_SIZE as f64 + chunk_z as f64) / 3.253,
-                        ])
-                        + 0.06);
-                if value >= (y as f32 / CHUNK_SIZE as f32) as f64 || y == 0 {
-                    chunk.cubes[x][y][z] = Block::Grass
-                }
-            }
-        }
-    }
-    chunk
-}
-
 pub struct ChunkTexture(pub Handle<Image>);
 
 fn load_chunk_texture(mut commands: Commands, server: Res<AssetServer>) {
     commands.insert_resource(ChunkTexture(server.load("array_test.png")));
-}
-
-fn spawn_custom_mesh(
-    mut commands: Commands,
-    mut materials: ResMut<Assets<CustomMaterial>>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    texture: Res<ChunkTexture>,
-) {
-    let chunks_to_spawn = WORLD_SIZE;
-    //FIXME dont use a vec for this
-    let mut chunks: Vec<Vec<Chunk>> = Vec::default();
-
-    for x in 0..chunks_to_spawn {
-        chunks.push(Vec::default());
-        for z in 0..chunks_to_spawn {
-            let chunk_x = x as f32 * CHUNK_SIZE as f32 * BLOCK_SIZE;
-            let chunk_z = z as f32 * CHUNK_SIZE as f32 * BLOCK_SIZE;
-            let chunk = gen_chunk(chunk_x, chunk_z);
-            chunks[x].push(chunk);
-        }
-    }
-
-    info!("Part 1");
-
-    //let mut arcs: [[Weak<_>; WORLD_SIZE]; WORLD_SIZE] = Default::default();
-    let mut arcs = [(); WORLD_SIZE].map(|_| [(); WORLD_SIZE].map(|_| <Arc<_>>::default()));
-    let mut weaks = [(); WORLD_SIZE].map(|_| [(); WORLD_SIZE].map(|_| <Weak<_>>::default()));
-    //Create arcs
-    for x in 0..chunks_to_spawn {
-        for z in 0..chunks_to_spawn {
-            let arc = Arc::new(RwLock::new(chunks[x][z].clone()));
-            arcs[x][z] = arc;
-            weaks[x][z] = Arc::downgrade(&arcs[x][z]);
-        }
-    }
-
-    info!("Part 2");
-
-    //link chunk neighbors
-    for x in 0..chunks_to_spawn {
-        for z in 0..chunks_to_spawn {
-            if x != chunks_to_spawn - 1 {
-                arcs[x][z].clone().write().unwrap().neighbors[ChunkDirection::Front] = weaks[x + 1][z].clone();
-            }
-            if x != 0 {
-                arcs[x][z].clone().write().unwrap().neighbors[ChunkDirection::Back] = weaks[x - 1][z].clone();
-            }
-            if z != 0 {
-                arcs[x][z].clone().write().unwrap().neighbors[ChunkDirection::Right] = weaks[x][z - 1].clone();
-            }
-            if z != chunks_to_spawn - 1 {
-                arcs[x][z].clone().write().unwrap().neighbors[ChunkDirection::Left] = weaks[x][z + 1].clone();
-            }
-        }
-    }
-
-    info!("Part 3");
-
-    for x in 0..chunks_to_spawn {
-        for z in 0..chunks_to_spawn {
-            let chunk_x = x as f32 * CHUNK_SIZE as f32 * BLOCK_SIZE;
-            let chunk_z = z as f32 * CHUNK_SIZE as f32 * BLOCK_SIZE;
-            commands
-                .spawn_bundle(MaterialMeshBundle {
-                    mesh: meshes.add(create_chunk_mesh(&chunks[x][z])),
-                    //mesh: meshes.add(shape::Box::default().into()),
-                    material: materials.add(CustomMaterial {
-                        textures: texture.0.clone(),
-                    }),
-                    transform: Transform::from_xyz(chunk_x, 0.0, chunk_z),
-
-                    ..default()
-                })
-                .insert(Wireframe)
-                .insert(ChunkComp {
-                    chunk: arcs[x][z].clone(),
-                });
-        }
-    }
-    info!("Done");
 }
 
 fn spawn_camera(mut commands: Commands) {

@@ -2166,6 +2166,7 @@ dependencies = [
  "bevy",
  "bevy-inspector-egui",
  "bevy_flycam",
+ "futures-lite",
  "noise",
  "rand 0.8.5",
  "rayon",

@@ -1,5 +1,3 @@
-use std::time::Duration;
-
 use bevy::{
     asset::LoadState,
     pbr::{MaterialPipeline, MaterialPipelineKey},
@@ -21,8 +19,7 @@ pub fn create_array_texture(
     mut images: ResMut<Assets<Image>>,
 ) {
     while asset_server.get_load_state(texture.0.clone()) != LoadState::Loaded {
-        info!("waiting on load");
-        std::thread::sleep(Duration::from_millis(10));
+        panic!("waiting on load, please fix this");
     }
     let image = images.get_mut(&texture.0).unwrap();
     if image.texture_descriptor.size.depth_or_array_layers != 1 {

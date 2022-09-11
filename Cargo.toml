@@ -19,4 +19,5 @@ noise = "0.7"
 strum = "0.24"
 strum_macros = "0.24"
 rayon = "1.5"
+futures-lite = "*"
 

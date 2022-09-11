@@ -12,7 +12,7 @@ use bevy::{
     },
 };
 
-use crate::{Chunk, ChunkDirection, BLOCK_SIZE, CHUNK_SIZE};
+use crate::{Chunk, Direction, BLOCK_SIZE, CHUNK_SIZE};
 
 #[derive(Default)]
 pub struct MeshDescription {
@@ -26,6 +26,7 @@ pub struct MeshDescription {
 pub fn create_chunk_mesh(chunk: &Chunk) -> Mesh {
     let mut mesh = Mesh::new(PrimitiveTopology::TriangleList);
     let mut description = MeshDescription::default();
+
     create_mesh_faces(chunk, &mut description);
 
     mesh.insert_attribute(
@@ -37,6 +38,8 @@ pub fn create_chunk_mesh(chunk: &Chunk) -> Mesh {
             .collect::<Vec<[f32; 3]>>(),
     );
 
+    // TODO figure out how to make bevy let me not add this
+    // Currently just sending the positions again
     mesh.insert_attribute(
         Mesh::ATTRIBUTE_NORMAL,
         description
@@ -46,11 +49,6 @@ pub fn create_chunk_mesh(chunk: &Chunk) -> Mesh {
             .collect::<Vec<[f32; 3]>>(),
     );
 
-    mesh.insert_attribute(CUSTOM_NORMAL, VertexAttributeValues::Uint8x2(description.normals));
-
-    mesh.insert_attribute(CUSTOM_UV, VertexAttributeValues::Uint8x2(description.uvs));
-
-    mesh.insert_attribute(ATTRIBUTE_TEXTURE_INDEX, description.texture_indices);
     mesh.set_indices(Some(Indices::U32(
         description
             .vert_indicies
@@ -58,17 +56,145 @@ pub fn create_chunk_mesh(chunk: &Chunk) -> Mesh {
             .map(|usized| *usized as u32)
             .collect::<Vec<u32>>(),
     )));
+
+    mesh.insert_attribute(CUSTOM_NORMAL, VertexAttributeValues::Uint8x2(description.normals));
+
+    mesh.insert_attribute(CUSTOM_UV, VertexAttributeValues::Uint8x2(description.uvs));
+
+    mesh.insert_attribute(ATTRIBUTE_TEXTURE_INDEX, description.texture_indices);
+
     mesh
 }
 
+// A single slide of a chunk, direction agnostic, used for greedy meshing
 #[derive(Default, Copy, Clone)]
 pub struct Sheet {
     blocks: [[Block; CHUNK_SIZE]; CHUNK_SIZE],
 }
 
+//Gathers the slices and runs the greedy algorithm
+fn create_mesh_faces(chunk: &Chunk, mesh_description: &mut MeshDescription) {
+    let mut top_slices = [Sheet::default(); CHUNK_SIZE];
+    let mut bottom_slices = [Sheet::default(); CHUNK_SIZE];
+    let mut left_slices = [Sheet::default(); CHUNK_SIZE];
+    let mut right_slices = [Sheet::default(); CHUNK_SIZE];
+    let mut front_slices = [Sheet::default(); CHUNK_SIZE];
+    let mut back_slices = [Sheet::default(); CHUNK_SIZE];
+    for z in 0..CHUNK_SIZE as isize {
+        for y in 0..CHUNK_SIZE as isize {
+            for x in 0..CHUNK_SIZE as isize {
+                let current_block = chunk.get_block(x, y, z).unwrap();
+                let [front_block, back_block, left_block, right_block, top_block, bottom_block] =
+                    chunk.get_block_neighbors(x, y, z);
+                if current_block.is_filled() && (left_block.is_none() || !left_block.unwrap().is_filled()) {
+                    left_slices[z as usize].blocks[x as usize][y as usize] = current_block;
+                }
+                if current_block.is_filled() && (right_block.is_none() || !right_block.unwrap().is_filled()) {
+                    right_slices[z as usize].blocks[x as usize][y as usize] = current_block;
+                }
+                if current_block.is_filled() && (front_block.is_none() || !front_block.unwrap().is_filled()) {
+                    front_slices[x as usize].blocks[z as usize][y as usize] = current_block;
+                }
+                if current_block.is_filled() && (back_block.is_none() || !back_block.unwrap().is_filled()) {
+                    back_slices[x as usize].blocks[z as usize][y as usize] = current_block;
+                }
+                if current_block.is_filled() && (top_block.is_none() || !top_block.unwrap().is_filled()) {
+                    top_slices[y as usize].blocks[x as usize][z as usize] = current_block;
+                }
+                if current_block.is_filled() && (bottom_block.is_none() || !bottom_block.unwrap().is_filled()) {
+                    bottom_slices[y as usize].blocks[x as usize][z as usize] = current_block;
+                }
+            }
+        }
+    }
+    for z in 0..CHUNK_SIZE as isize {
+        greedy(&back_slices[z as usize], Direction::Back, mesh_description, z as usize);
+        greedy(
+            &front_slices[z as usize],
+            Direction::Front,
+            mesh_description,
+            z as usize,
+        );
+        greedy(&left_slices[z as usize], Direction::Left, mesh_description, z as usize);
+        greedy(
+            &right_slices[z as usize],
+            Direction::Right,
+            mesh_description,
+            z as usize,
+        );
+        greedy(&top_slices[z as usize], Direction::Top, mesh_description, z as usize);
+        greedy(
+            &bottom_slices[z as usize],
+            Direction::Bottom,
+            mesh_description,
+            z as usize,
+        );
+    }
+}
+
+//I think it makes the code clearer as is, clippy wants to make the iterations over finished
+//But there are 2 different uses for every index so doing the iterator over finished and also enumerating it
+//Seems to break a single concept into 2 for no great reason
+#[allow(clippy::needless_range_loop)]
+fn greedy(sheet: &Sheet, dir: Direction, desc: &mut MeshDescription, z: usize) {
+    let mut finished = [[false; CHUNK_SIZE]; CHUNK_SIZE];
+
+    for x in 0..CHUNK_SIZE {
+        for y in 0..CHUNK_SIZE {
+            finished[x][y] = !sheet.blocks[x][y].is_filled();
+        }
+    }
+
+    //gross
+    while finished.iter().flatten().any(|x| x == &false) {
+        for x in 0..CHUNK_SIZE {
+            for y in 0..CHUNK_SIZE {
+                if !finished[x][y] {
+                    //Starting point, walk x to get width
+                    let start = sheet.blocks[x][y];
+                    let mut width = 1;
+                    for w in x + 1..CHUNK_SIZE {
+                        if start == sheet.blocks[w][y] && !finished[w][y] {
+                            width += 1;
+                        } else {
+                            break;
+                        }
+                    }
+                    //Now walk y to get height
+                    let mut height = 1;
+                    for h in y + 1..CHUNK_SIZE {
+                        let mut all_same = true;
+                        for w in x..x + width {
+                            if start != sheet.blocks[w][h] || finished[w][h] {
+                                all_same = false;
+                                break;
+                            }
+                        }
+                        if all_same {
+                            height += 1;
+                        } else {
+                            break;
+                        }
+                    }
+
+                    //Time to make the rect and mark finished
+                    create_greedy_face(start, dir, x, y, z, width, height, desc);
+
+                    for u in x..x + width {
+                        for v in y..y + height {
+                            finished[u][v] = true;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+// Creates a single face on the mesh
 fn create_greedy_face(
     block: Block,
-    dir: ChunkDirection,
+    dir: Direction,
     x: usize,
     y: usize,
     z: usize,
@@ -80,49 +206,43 @@ fn create_greedy_face(
     let height = height as f32;
     let (x, y, z) = (x as f32, y as f32, z as f32 + 1.0);
     let new_verts = match dir {
-        ChunkDirection::Front => [
+        Direction::Front => [
             Vec3::new(z, y, width + x),
             Vec3::new(z, y, x),
             Vec3::new(z, height + y, x),
             Vec3::new(z, height + y, width + x),
         ],
-        ChunkDirection::Back => [
+        Direction::Back => [
             Vec3::new(z - 1.0, y, x),
             Vec3::new(z - 1.0, y, width + x),
             Vec3::new(z - 1.0, height + y, width + x),
             Vec3::new(z - 1.0, height + y, x),
         ],
-        ChunkDirection::Left => [
+        Direction::Left => [
             Vec3::new(x, y, z),
             Vec3::new(width + x, y, z),
             Vec3::new(width + x, height + y, z),
             Vec3::new(x, height + y, z),
         ],
-        ChunkDirection::Right => [
+        Direction::Right => [
             Vec3::new(width + x, y, z - 1.0),
             Vec3::new(x, y, z - 1.0),
             Vec3::new(x, height + y, z - 1.0),
             Vec3::new(width + x, height + y, z - 1.0),
         ],
-        ChunkDirection::Top => [
+        Direction::Top => [
             Vec3::new(x, z, height + y),
             Vec3::new(width + x, z, height + y),
             Vec3::new(width + x, z, y),
             Vec3::new(x, z, y),
         ],
-        ChunkDirection::Bottom => [
+        Direction::Bottom => [
             Vec3::new(x, z - 1.0, y),
             Vec3::new(width + x, z - 1.0, y),
             Vec3::new(width + x, z - 1.0, height + y),
             Vec3::new(x, z - 1.0, height + y),
         ],
     };
-
-    //let offset_transform = Vec3::new(-(width as f32 / 2.0), -(height as f32 / 2.0), 0.0);
-    //new_verts.iter_mut().for_each(|vec| *vec = *vec + offset_transform);
-
-    //let transform = Vec3::new(x as f32, y as f32, z as f32);
-    //new_verts.iter_mut().for_each(|vec| *vec = *vec + transform);
 
     let new_uvs = [[0, height as u8], [width as u8, height as u8], [width as u8, 0], [0, 0]];
 
@@ -134,16 +254,8 @@ fn create_greedy_face(
         Vec3::new(0.0, 1.0, 0.0),
     ];
 
-    //let magic_offset = Vec3::new(-(width as f32 / 2.0), -(height as f32 / 2.0), 0.0);
-
-    //new_verts.iter_mut().for_each(|vec| *vec = rotation * *vec);
-    //new_verts
-    //.iter_mut()
-    //.for_each(|vec| *vec = *vec + rotation * (offset_transform - transform));
-
-    //why
-
     let rotation = dir.get_face_rotation();
+    //FIXME normals aren't right maybe?
     new_normals.iter_mut().for_each(|vec| *vec = rotation * *vec);
 
     let normals = new_normals
@@ -182,133 +294,11 @@ fn create_greedy_face(
         .extend_from_slice(&[vert_start, vert_start + 2, vert_start + 3]);
 }
 
-fn greedy(sheet: &Sheet, dir: ChunkDirection, desc: &mut MeshDescription, z: usize) {
-    let mut finished = [[false; CHUNK_SIZE]; CHUNK_SIZE];
+/*
+ * Non-greedy mesh generation below here
+ */
 
-    for x in 0..CHUNK_SIZE {
-        for y in 0..CHUNK_SIZE {
-            finished[x][y] = !sheet.blocks[x][y].is_filled();
-        }
-    }
-
-    //gross
-    while finished.iter().flatten().collect::<Vec<&bool>>().contains(&&false) {
-        for x in 0..CHUNK_SIZE {
-            for y in 0..CHUNK_SIZE {
-                if finished[x][y] == false {
-                    //Starting point, walk x to get width
-                    let start = sheet.blocks[x][y];
-                    let mut width = 1;
-                    for w in x + 1..CHUNK_SIZE {
-                        if start == sheet.blocks[w][y] && !finished[w][y] {
-                            width += 1;
-                        } else {
-                            break;
-                        }
-                    }
-                    //Now walk y to get height
-                    let mut height = 1;
-                    for h in y + 1..CHUNK_SIZE {
-                        let mut all_same = true;
-                        for w in x..x + width {
-                            if start != sheet.blocks[w][h] || finished[w][h] {
-                                all_same = false;
-                                break;
-                            }
-                        }
-                        if all_same {
-                            height += 1;
-                        } else {
-                            break;
-                        }
-                    }
-                    //Time to make the rect and mark finished
-                    create_greedy_face(start, dir, x, y, z, width, height, desc);
-                    for u in x..x + width {
-                        for v in y..y + height {
-                            finished[u][v] = true;
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-fn create_mesh_faces(chunk: &Chunk, mesh_description: &mut MeshDescription) {
-    let mut top_slices = [Sheet::default(); CHUNK_SIZE];
-    let mut bottom_slices = [Sheet::default(); CHUNK_SIZE];
-    let mut left_slices = [Sheet::default(); CHUNK_SIZE];
-    let mut right_slices = [Sheet::default(); CHUNK_SIZE];
-    let mut front_slices = [Sheet::default(); CHUNK_SIZE];
-    let mut back_slices = [Sheet::default(); CHUNK_SIZE];
-    for z in 0..CHUNK_SIZE as isize {
-        for y in 0..CHUNK_SIZE as isize {
-            for x in 0..CHUNK_SIZE as isize {
-                let current_block = chunk.get_block(x, y, z).unwrap();
-                let [front_block, back_block, left_block, right_block, top_block, bottom_block] =
-                    chunk.get_block_neighbors(x, y, z);
-                if current_block.is_filled() && (left_block.is_none() || !left_block.unwrap().is_filled()) {
-                    left_slices[z as usize].blocks[x as usize][y as usize] = current_block;
-                }
-                if current_block.is_filled() && (right_block.is_none() || !right_block.unwrap().is_filled()) {
-                    right_slices[z as usize].blocks[x as usize][y as usize] = current_block;
-                }
-                if current_block.is_filled() && (front_block.is_none() || !front_block.unwrap().is_filled()) {
-                    front_slices[x as usize].blocks[z as usize][y as usize] = current_block;
-                }
-                if current_block.is_filled() && (back_block.is_none() || !back_block.unwrap().is_filled()) {
-                    back_slices[x as usize].blocks[z as usize][y as usize] = current_block;
-                }
-                if current_block.is_filled() && (top_block.is_none() || !top_block.unwrap().is_filled()) {
-                    top_slices[y as usize].blocks[x as usize][z as usize] = current_block;
-                }
-                if current_block.is_filled() && (bottom_block.is_none() || !bottom_block.unwrap().is_filled()) {
-                    bottom_slices[y as usize].blocks[x as usize][z as usize] = current_block;
-                }
-            }
-        }
-    }
-    for z in 0..CHUNK_SIZE as isize {
-        greedy(
-            &back_slices[z as usize],
-            ChunkDirection::Back,
-            mesh_description,
-            z as usize,
-        );
-        greedy(
-            &front_slices[z as usize],
-            ChunkDirection::Front,
-            mesh_description,
-            z as usize,
-        );
-        greedy(
-            &left_slices[z as usize],
-            ChunkDirection::Left,
-            mesh_description,
-            z as usize,
-        );
-        greedy(
-            &right_slices[z as usize],
-            ChunkDirection::Right,
-            mesh_description,
-            z as usize,
-        );
-        greedy(
-            &top_slices[z as usize],
-            ChunkDirection::Top,
-            mesh_description,
-            z as usize,
-        );
-        greedy(
-            &bottom_slices[z as usize],
-            ChunkDirection::Bottom,
-            mesh_description,
-            z as usize,
-        );
-    }
-}
-
+#[allow(dead_code)]
 fn create_mesh_faces_old(chunk: &Chunk, mesh_description: &mut MeshDescription) {
     for z in 0..CHUNK_SIZE as isize {
         for y in 0..CHUNK_SIZE as isize {
@@ -325,7 +315,7 @@ fn create_mesh_faces_old(chunk: &Chunk, mesh_description: &mut MeshDescription) 
                             y as f32 * BLOCK_SIZE,
                             (z as f32 - 0.5) * BLOCK_SIZE,
                         ),
-                        current_block.get_face_index(ChunkDirection::Front),
+                        current_block.get_face_index(Direction::Front),
                     );
                 }
                 //Back
@@ -338,7 +328,7 @@ fn create_mesh_faces_old(chunk: &Chunk, mesh_description: &mut MeshDescription) 
                             y as f32 * BLOCK_SIZE,
                             (z as f32 - 0.5) * BLOCK_SIZE,
                         ),
-                        current_block.get_face_index(ChunkDirection::Back),
+                        current_block.get_face_index(Direction::Back),
                     );
                 }
                 //Top
@@ -352,7 +342,7 @@ fn create_mesh_faces_old(chunk: &Chunk, mesh_description: &mut MeshDescription) 
                             (y as f32 + 0.5) * BLOCK_SIZE,
                             (z as f32 - 0.5) * BLOCK_SIZE,
                         ),
-                        current_block.get_face_index(ChunkDirection::Top),
+                        current_block.get_face_index(Direction::Top),
                     );
                 }
                 //Bottom
@@ -365,7 +355,7 @@ fn create_mesh_faces_old(chunk: &Chunk, mesh_description: &mut MeshDescription) 
                             (y as f32 - 0.5) * BLOCK_SIZE,
                             (z as f32 - 0.5) * BLOCK_SIZE,
                         ),
-                        current_block.get_face_index(ChunkDirection::Bottom),
+                        current_block.get_face_index(Direction::Bottom),
                     );
                 }
                 //Left
@@ -374,7 +364,7 @@ fn create_mesh_faces_old(chunk: &Chunk, mesh_description: &mut MeshDescription) 
                         mesh_description,
                         Quat::from_axis_angle(Vec3::Y, 0.0),
                         Vec3::new((x as f32) * BLOCK_SIZE, y as f32 * BLOCK_SIZE, (z as f32) * BLOCK_SIZE),
-                        current_block.get_face_index(ChunkDirection::Left),
+                        current_block.get_face_index(Direction::Left),
                     );
                 }
                 //Right
@@ -387,7 +377,7 @@ fn create_mesh_faces_old(chunk: &Chunk, mesh_description: &mut MeshDescription) 
                             y as f32 * BLOCK_SIZE,
                             (z as f32 - 1.0) * BLOCK_SIZE,
                         ),
-                        current_block.get_face_index(ChunkDirection::Right),
+                        current_block.get_face_index(Direction::Right),
                     );
                 }
             }
@@ -395,6 +385,7 @@ fn create_mesh_faces_old(chunk: &Chunk, mesh_description: &mut MeshDescription) 
     }
 }
 
+#[allow(dead_code)]
 fn add_face(mesh_description: &mut MeshDescription, rotation: Quat, transform: Vec3, face_index: u32) {
     let mut new_verts = [
         Vec3::new(-BLOCK_SIZE / 2.0, -BLOCK_SIZE / 2.0, 0.0),

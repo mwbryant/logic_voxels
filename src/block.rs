@@ -1,6 +1,4 @@
-use bevy::prelude::*;
-
-use crate::chunk::ChunkDirection;
+use crate::direction::Direction;
 
 #[derive(Default, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Block {
@@ -15,13 +13,13 @@ impl Block {
         !matches!(self, Block::Air)
     }
 
-    pub fn get_face_index(&self, direction: ChunkDirection) -> u32 {
+    pub fn get_face_index(&self, direction: Direction) -> u32 {
         match self {
             Block::Air => 0,
             Block::Grass => match direction {
-                ChunkDirection::Front | ChunkDirection::Back | ChunkDirection::Left | ChunkDirection::Right => 1,
-                ChunkDirection::Top => 0,
-                ChunkDirection::Bottom => 2,
+                Direction::Front | Direction::Back | Direction::Left | Direction::Right => 1,
+                Direction::Top => 0,
+                Direction::Bottom => 2,
             },
             Block::Dirt => 2,
         }
