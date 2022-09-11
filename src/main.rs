@@ -30,7 +30,7 @@ mod material;
 pub struct FollowCamera;
 
 pub const CHUNK_SIZE: usize = 16;
-pub const WORLD_SIZE: usize = 20;
+pub const WORLD_SIZE: usize = 10;
 pub const MAX_CHUNK_UPDATES_PER_FRAME: usize = 30;
 pub const BLOCK_SIZE: f32 = 1.0;
 
@@ -58,10 +58,14 @@ fn update_dirt_sys(chunks: Query<&ChunkComp>, input: Res<Input<KeyCode>>) {
     }
 }
 
-fn click_detection(mouse: Res<Input<MouseButton>>, transform: Query<&Transform, With<Camera3d>>) {
+fn click_detection(
+    mouse: Res<Input<MouseButton>>,
+    transform: Query<&Transform, With<Camera3d>>,
+    loaded_chunks: Res<LoadedChunks>,
+) {
     let transform = transform.single();
-    let range = 5.0;
-    if mouse.just_pressed(MouseButton::Left) {
+    let range = 15.0;
+    if mouse.pressed(MouseButton::Left) {
         info!("Looking toward {:?}, {:?}", transform.translation, transform.forward());
         // https://www.geeksforgeeks.org/bresenhams-algorithm-for-3-d-line-drawing/
         let end = transform.translation + transform.forward() * range;
@@ -73,6 +77,8 @@ fn click_detection(mouse: Res<Input<MouseButton>>, transform: Query<&Transform, 
         let zs = if dir.z > 0.0 { 1.0 } else { -1.0 };
         let diff = end - current;
         let diff = diff.abs();
+
+        let mut to_check = Vec::default();
 
         //X is driving
         if diff.x > diff.y && diff.x > diff.z {
@@ -92,8 +98,9 @@ fn click_detection(mouse: Res<Input<MouseButton>>, transform: Query<&Transform, 
                 p1 += 2. * diff.y;
                 p2 += 2. * diff.z;
                 info!("Checking {}", current.as_ivec3());
+                to_check.push(current.as_ivec3());
             }
-        //Y driving
+            //Y driving
         } else if diff.y > diff.z && diff.y > diff.x {
             let mut p1 = 2. * diff.x - diff.y;
             let mut p2 = 2. * diff.z - diff.y;
@@ -111,6 +118,7 @@ fn click_detection(mouse: Res<Input<MouseButton>>, transform: Query<&Transform, 
                 p1 += 2. * diff.x;
                 p2 += 2. * diff.z;
                 info!("Checking {}", current.as_ivec3());
+                to_check.push(current.as_ivec3());
             }
         //Z driving
         } else {
@@ -130,6 +138,32 @@ fn click_detection(mouse: Res<Input<MouseButton>>, transform: Query<&Transform, 
                 p1 += 2. * diff.x;
                 p2 += 2. * diff.y;
                 info!("Checking {}", current.as_ivec3());
+                to_check.push(current.as_ivec3());
+            }
+        }
+
+        for pos in to_check {
+            let size = CHUNK_SIZE as i32;
+            let offset = IVec3::new(pos.x.rem_euclid(size), pos.y.rem_euclid(size), pos.z.rem_euclid(size));
+            let chunk_pos = IVec3::new(pos.x / size, pos.y / size, pos.z / size);
+            if let Some(chunk) = loaded_chunks.arc_map.get(&chunk_pos) {
+                if let Some(chunk) = chunk.upgrade() {
+                    info!(
+                        "Block {}, {}, {}, {:?}",
+                        pos,
+                        chunk_pos,
+                        offset,
+                        chunk.read().unwrap().cubes[offset.x as usize][offset.y as usize][offset.z as usize]
+                    );
+                    if chunk.read().unwrap().cubes[offset.x as usize][offset.y as usize][offset.z as usize]
+                        != Block::Air
+                    {
+                        chunk.write().unwrap().cubes[offset.x as usize][offset.y as usize][offset.z as usize] =
+                            Block::Red;
+                        chunk.write().unwrap().dirty = true;
+                        return;
+                    }
+                }
             }
         }
     }
@@ -225,6 +259,30 @@ fn load_chunk_texture(mut commands: Commands, server: Res<AssetServer>) {
 }
 
 fn spawn_camera(mut commands: Commands) {
+    commands
+        .spawn_bundle(NodeBundle {
+            style: Style {
+                size: Size::new(Val::Percent(100.0), Val::Percent(100.0)),
+                align_self: AlignSelf::Center,
+                justify_content: JustifyContent::Center,
+                ..default()
+            },
+            color: Color::NONE.into(),
+            ..default()
+        })
+        .with_children(|commands| {
+            commands.spawn_bundle(NodeBundle {
+                style: Style {
+                    size: Size::new(Val::Px(10.0), Val::Px(10.0)),
+                    align_self: AlignSelf::Center,
+                    justify_content: JustifyContent::Center,
+                    ..default()
+                },
+                color: Color::RED.into(),
+                ..default()
+            });
+        });
+
     commands
         .spawn_bundle(Camera3dBundle {
             transform: Transform::from_xyz(-3.0, 15.5, -1.0).looking_at(Vec3::new(100.0, 0.0, 100.0), Vec3::Y),

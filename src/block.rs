@@ -6,6 +6,7 @@ pub enum Block {
     Air,
     Grass,
     Dirt,
+    Red,
 }
 
 impl Block {
@@ -22,6 +23,7 @@ impl Block {
                 Direction::Bottom => 2,
             },
             Block::Dirt => 2,
+            Block::Red => 3,
         }
     }
 }

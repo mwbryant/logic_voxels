@@ -28,7 +28,7 @@ pub fn create_array_texture(
     info!("Converting!");
 
     // Create a new array texture asset from the loaded texture.
-    let array_layers = 3;
+    let array_layers = 4;
     image.reinterpret_stacked_2d_as_array(array_layers);
 }
 

@@ -21,10 +21,10 @@ use crate::{
 // Not a very robust design
 #[derive(Default)]
 pub struct LoadedChunks {
-    arc_map: HashMap<IVec3, Weak<RwLock<Chunk>>>,
+    pub arc_map: HashMap<IVec3, Weak<RwLock<Chunk>>>,
     //XXX the ent is only valid if the arc is valid...
     //Maybe, it depends on the usage
-    ent_map: HashMap<IVec3, Entity>,
+    pub ent_map: HashMap<IVec3, Entity>,
 }
 
 //World generation
