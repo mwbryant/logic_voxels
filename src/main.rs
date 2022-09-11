@@ -58,6 +58,83 @@ fn update_dirt_sys(chunks: Query<&ChunkComp>, input: Res<Input<KeyCode>>) {
     }
 }
 
+fn click_detection(mouse: Res<Input<MouseButton>>, transform: Query<&Transform, With<Camera3d>>) {
+    let transform = transform.single();
+    let range = 5.0;
+    if mouse.just_pressed(MouseButton::Left) {
+        info!("Looking toward {:?}, {:?}", transform.translation, transform.forward());
+        // https://www.geeksforgeeks.org/bresenhams-algorithm-for-3-d-line-drawing/
+        let end = transform.translation + transform.forward() * range;
+        let start = transform.translation;
+        let mut current = transform.translation;
+        let dir = transform.forward();
+        let xs = if dir.x > 0.0 { 1.0 } else { -1.0 };
+        let ys = if dir.y > 0.0 { 1.0 } else { -1.0 };
+        let zs = if dir.z > 0.0 { 1.0 } else { -1.0 };
+        let diff = end - current;
+        let diff = diff.abs();
+
+        //X is driving
+        if diff.x > diff.y && diff.x > diff.z {
+            let mut p1 = 2. * diff.y - diff.x;
+            let mut p2 = 2. * diff.z - diff.x;
+            while (start.x < end.x && current.x < end.x) || (start.x > end.x && current.x > end.x) {
+                //FIXME blocksize?
+                current.x += xs;
+                if p1 >= 0. {
+                    current.y += ys;
+                    p1 -= 2. * diff.x;
+                }
+                if p2 >= 0. {
+                    current.z += zs;
+                    p2 -= 2. * diff.x;
+                }
+                p1 += 2. * diff.y;
+                p2 += 2. * diff.z;
+                info!("Checking {}", current.as_ivec3());
+            }
+        //Y driving
+        } else if diff.y > diff.z && diff.y > diff.x {
+            let mut p1 = 2. * diff.x - diff.y;
+            let mut p2 = 2. * diff.z - diff.y;
+            while (start.y < end.y && current.y < end.y) || (start.y > end.y && current.y > end.y) {
+                //FIXME blocksize?
+                current.y += ys;
+                if p1 >= 0. {
+                    current.x += xs;
+                    p1 -= 2. * diff.y;
+                }
+                if p2 >= 0. {
+                    current.z += zs;
+                    p2 -= 2. * diff.y;
+                }
+                p1 += 2. * diff.x;
+                p2 += 2. * diff.z;
+                info!("Checking {}", current.as_ivec3());
+            }
+        //Z driving
+        } else {
+            let mut p1 = 2. * diff.x - diff.z;
+            let mut p2 = 2. * diff.y - diff.z;
+            while (start.z < end.z && current.z < end.z) || (start.z > end.z && current.z > end.z) {
+                //FIXME blocksize?
+                current.z += zs;
+                if p1 >= 0. {
+                    current.x += xs;
+                    p1 -= 2. * diff.z;
+                }
+                if p2 >= 0. {
+                    current.y += ys;
+                    p2 -= 2. * diff.z;
+                }
+                p1 += 2. * diff.x;
+                p2 += 2. * diff.y;
+                info!("Checking {}", current.as_ivec3());
+            }
+        }
+    }
+}
+
 fn main() {
     App::new()
         .insert_resource(ImageSettings {
@@ -90,6 +167,7 @@ fn main() {
         .add_startup_system(spawn_camera)
         .add_system(create_array_texture)
         .add_system(spawn_chunk_meshes)
+        .add_system(click_detection)
         .init_resource::<LoadedChunks>()
         .add_startup_system_to_stage(StartupStage::PreStartup, load_chunk_texture)
         .add_startup_system(initial_chunk_spawning)
