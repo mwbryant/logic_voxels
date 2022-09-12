@@ -20,21 +20,66 @@ impl ChunkComp {
     pub fn write_block(&self, index: IVec3, block: Block) {
         //There's really no point in bounds checking this index, a logic error trying to write the wrong block should panic
         //Maybe one day there will be a use for a varient that returns a recoverable error
-        self.chunk.write().unwrap().cubes[index.x as usize][index.y as usize][index.z as usize] = block;
-        //Really only need to dirty if block is different but eh
-        self.write_dirty(true);
+        self.write_block_xyz(index.x as usize, index.y as usize, index.z as usize, block);
     }
 
     pub fn write_block_xyz(&self, x: usize, y: usize, z: usize, block: Block) {
+        //let _span = info_span!("Write Block", name = "Write Block").entered();
         self.chunk.write().unwrap().cubes[x][y][z] = block;
+        //Really only need to dirty if block is different but eh
+        if !self.chunk.read().unwrap().dirty {
+            self.write_dirty(true);
+        }
+        if x == CHUNK_SIZE - 1 {
+            self.dirty_neighbor(Direction::Front);
+        }
+        if x == 0 {
+            self.dirty_neighbor(Direction::Back);
+        }
+        if y == CHUNK_SIZE - 1 {
+            self.dirty_neighbor(Direction::Top);
+        }
+        if y == 0 {
+            self.dirty_neighbor(Direction::Bottom);
+        }
+        if z == CHUNK_SIZE - 1 {
+            self.dirty_neighbor(Direction::Left);
+        }
+        if z == 0 {
+            self.dirty_neighbor(Direction::Right);
+        }
     }
 
     pub fn write_dirty(&self, value: bool) {
         self.chunk.write().unwrap().dirty = value;
     }
 
-    pub fn write_neighbor(&self, dir: Direction, neighbor: &ChunkComp) {
+    pub fn dirty_neighbor(&self, dir: Direction) {
+        if let Some(neighbor) = self.chunk.read().unwrap().neighbors[dir].upgrade() {
+            if !neighbor.read().unwrap().dirty {
+                neighbor.write().unwrap().dirty = true;
+            }
+        }
+    }
+
+    pub fn set_neighbor(&self, dir: Direction, neighbor: &ChunkComp) {
         self.chunk.write().unwrap().neighbors[dir] = neighbor.as_neighbor();
+    }
+
+    pub fn apply_function_to_blocks<F>(&self, mut function: F)
+    where
+        F: FnMut(&Block, [Option<Block>; 6]) -> Option<Block>,
+    {
+        for z in 0..CHUNK_SIZE {
+            for y in 0..CHUNK_SIZE {
+                for x in 0..CHUNK_SIZE {
+                    let neighbors = self.read_chunk().get_block_neighbors(x, y, z);
+                    if let Some(block) = function(&self.read_block_xyz(x, y, z), neighbors) {
+                        self.write_block_xyz(x as usize, y as usize, z as usize, block)
+                    }
+                }
+            }
+        }
     }
 
     fn as_neighbor(&self) -> Weak<RwLock<Chunk>> {

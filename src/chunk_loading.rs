@@ -93,13 +93,13 @@ pub fn spawn_chunk_meshes(
                     //Set this chunks top neighbor
                     //Set the top neighbors bottom to this chunk
                     if let Ok(neighbor) = chunks.get(loaded_chunks.ent_map[&pos]) {
-                        comp.write_neighbor(dir, neighbor);
-                        neighbor.write_neighbor(dir.opposite(), comp);
+                        comp.set_neighbor(dir, neighbor);
+                        neighbor.set_neighbor(dir.opposite(), comp);
                     } else {
                         //Spawned this frame
                         let neighbor = &spawned_this_frame[&loaded_chunks.ent_map[&pos]];
-                        comp.write_neighbor(dir, neighbor);
-                        neighbor.write_neighbor(dir.opposite(), comp);
+                        comp.set_neighbor(dir, neighbor);
+                        neighbor.set_neighbor(dir.opposite(), comp);
                     }
                 }
             }

@@ -1,6 +1,7 @@
 #![allow(clippy::too_many_arguments)]
 
 use chunk_loading::{initial_chunk_spawning, spawn_chunk_meshes, LoadedChunks};
+use chunk_updating::{update_dirt, update_dirt_sys, update_dirty_chunks};
 use direction::Direction;
 
 use bevy::{
@@ -25,6 +26,7 @@ mod block;
 mod chunk;
 mod chunk_loading;
 mod chunk_mesh_generation;
+mod chunk_updating;
 mod direction;
 mod material;
 
@@ -32,39 +34,9 @@ mod material;
 pub struct FollowCamera;
 
 pub const CHUNK_SIZE: usize = 16;
-pub const WORLD_SIZE: usize = 4;
+pub const WORLD_SIZE: usize = 20;
 pub const MAX_CHUNK_UPDATES_PER_FRAME: usize = 30;
 pub const BLOCK_SIZE: f32 = 1.0;
-
-fn update_dirty_chunks(
-    mut commands: Commands,
-    mut chunks: Query<(Entity, &ChunkComp, &mut Handle<Mesh>)>,
-    mut meshes: ResMut<Assets<Mesh>>,
-) {
-    //TODO all of this can be done in parallel except for adding mesh to assets
-    //FIXME for now I'm just going to cap the number of chunk updates per frame
-    let mut updates = 0;
-    for (entity, chunk, mut mesh) in &mut chunks {
-        if chunk.read_dirty() {
-            *mesh = meshes.add(create_chunk_mesh(&chunk.read_chunk()));
-            //Remove because it needs to be recalculated by bevy
-            commands.entity(entity).remove::<Aabb>();
-            updates += 1;
-            chunk.write_dirty(false);
-        }
-        if updates > MAX_CHUNK_UPDATES_PER_FRAME {
-            return;
-        }
-    }
-}
-
-fn update_dirt_sys(chunks: Query<&ChunkComp>, input: Res<Input<KeyCode>>) {
-    if input.just_pressed(KeyCode::Space) {
-        chunks.par_for_each(5, |chunk| {
-            apply_function_to_blocks(chunk, update_dirt);
-        });
-    }
-}
 
 fn click_detection(
     mouse: Res<Input<MouseButton>>,
@@ -74,9 +46,7 @@ fn click_detection(
 ) {
     let transform = transform.single();
     let range = 9.0;
-    if mouse.pressed(MouseButton::Left) {
-        info!("Looking toward {:?}, {:?}", transform.translation, transform.forward());
-        // https://www.geeksforgeeks.org/bresenhams-algorithm-for-3-d-line-drawing/
+    if mouse.just_pressed(MouseButton::Left) {
         let end = transform.translation + transform.forward() * range;
         let mut current = transform.translation;
 
@@ -86,15 +56,12 @@ fn click_detection(
 
         let inc = diff / steps;
 
-        let mut to_check = Vec::default();
+        let size = CHUNK_SIZE as i32;
+
         for _i in 0..(steps as usize) {
             let block_pos = current - Vec3::ONE / 2.0;
-            to_check.push(block_pos.round().as_ivec3());
-            current += inc;
-        }
+            let pos = block_pos.round().as_ivec3();
 
-        for pos in to_check {
-            let size = CHUNK_SIZE as i32;
             let offset = IVec3::new(pos.x.rem_euclid(size), pos.y.rem_euclid(size), pos.z.rem_euclid(size));
             let x = if pos.x >= 0 { pos.x / size } else { pos.x / size - 1 };
             let y = if pos.y >= 0 { pos.y / size } else { pos.y / size - 1 };
@@ -102,19 +69,27 @@ fn click_detection(
             let chunk_pos = IVec3::new(x, y, z);
             if let Some(chunk) = loaded_chunks.ent_map.get(&chunk_pos) {
                 let chunk = comps.get(*chunk).unwrap();
-                info!(
-                    "Block {}, {}, {}, {:?}",
-                    pos,
-                    chunk_pos,
-                    offset,
-                    chunk.read_block(offset)
-                );
+
                 if chunk.read_block(offset) != Block::Air {
+                    chunk.write_block(offset, Block::Air);
                     //Rewind for placement
-                    chunk.write_block(offset, Block::Red);
+                    let block_pos = current - Vec3::ONE / 2.0 - inc;
+                    let pos = block_pos.round().as_ivec3();
+
+                    let offset = IVec3::new(pos.x.rem_euclid(size), pos.y.rem_euclid(size), pos.z.rem_euclid(size));
+                    let x = if pos.x >= 0 { pos.x / size } else { pos.x / size - 1 };
+                    let y = if pos.y >= 0 { pos.y / size } else { pos.y / size - 1 };
+                    let z = if pos.z >= 0 { pos.z / size } else { pos.z / size - 1 };
+                    let chunk_pos = IVec3::new(x, y, z);
+                    if let Some(chunk) = loaded_chunks.ent_map.get(&chunk_pos) {
+                        let chunk = comps.get(*chunk).unwrap();
+                        chunk.write_block(offset, Block::Red);
+                    }
                     return;
                 }
             }
+
+            current += inc;
         }
     }
 }
@@ -159,35 +134,6 @@ fn main() {
         .add_system(update_dirt_sys)
         .add_system(update_dirty_chunks)
         .run();
-}
-
-fn apply_function_to_blocks<F>(chunk: &ChunkComp, mut function: F)
-where
-    F: FnMut(&Block, [Option<Block>; 6]) -> Option<Block>,
-{
-    for z in 0..CHUNK_SIZE {
-        for y in 0..CHUNK_SIZE {
-            for x in 0..CHUNK_SIZE {
-                let neighbors = chunk.read_chunk().get_block_neighbors(x, y, z);
-                //No deadlocks because only write when you know you are done reading
-                if let Some(block) = function(&chunk.read_block_xyz(x, y, z), neighbors) {
-                    chunk.write_dirty(true);
-                    chunk.write_block_xyz(x as usize, y as usize, z as usize, block)
-                }
-            }
-        }
-    }
-}
-
-fn update_dirt(block: &Block, neighbors: [Option<Block>; 6]) -> Option<Block> {
-    if matches!(block, Block::Grass) {
-        if let Some(top) = neighbors[Direction::Top] {
-            if !matches!(top, Block::Air) {
-                return Some(Block::Dirt);
-            }
-        }
-    }
-    None
 }
 
 fn camera_follow(
