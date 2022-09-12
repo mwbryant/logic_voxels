@@ -8,6 +8,7 @@ use bevy::{
     pbr::wireframe::WireframePlugin,
     prelude::*,
     render::{
+        primitives::Aabb,
         render_resource::{AddressMode, FilterMode, SamplerDescriptor},
         texture::ImageSettings,
     },
@@ -31,19 +32,25 @@ mod material;
 pub struct FollowCamera;
 
 pub const CHUNK_SIZE: usize = 16;
-pub const WORLD_SIZE: usize = 10;
+pub const WORLD_SIZE: usize = 4;
 pub const MAX_CHUNK_UPDATES_PER_FRAME: usize = 30;
 pub const BLOCK_SIZE: f32 = 1.0;
 
-fn update_dirty_chunks(mut chunks: Query<(&ChunkComp, &mut Handle<Mesh>)>, mut meshes: ResMut<Assets<Mesh>>) {
+fn update_dirty_chunks(
+    mut commands: Commands,
+    mut chunks: Query<(Entity, &ChunkComp, &mut Handle<Mesh>)>,
+    mut meshes: ResMut<Assets<Mesh>>,
+) {
     //TODO all of this can be done in parallel except for adding mesh to assets
     //FIXME for now I'm just going to cap the number of chunk updates per frame
     let mut updates = 0;
-    for (chunk, mut mesh) in &mut chunks {
-        if chunk.chunk.read().unwrap().dirty {
-            *mesh = meshes.add(create_chunk_mesh(&chunk.chunk.read().unwrap()));
+    for (entity, chunk, mut mesh) in &mut chunks {
+        if chunk.read_dirty() {
+            *mesh = meshes.add(create_chunk_mesh(&chunk.read_chunk()));
+            //Remove because it needs to be recalculated by bevy
+            commands.entity(entity).remove::<Aabb>();
             updates += 1;
-            chunk.chunk.write().unwrap().dirty = false;
+            chunk.write_dirty(false);
         }
         if updates > MAX_CHUNK_UPDATES_PER_FRAME {
             return;
@@ -63,6 +70,7 @@ fn click_detection(
     mouse: Res<Input<MouseButton>>,
     transform: Query<&Transform, With<Camera3d>>,
     loaded_chunks: Res<LoadedChunks>,
+    comps: Query<&ChunkComp>,
 ) {
     let transform = transform.single();
     let range = 9.0;
@@ -92,25 +100,19 @@ fn click_detection(
             let y = if pos.y >= 0 { pos.y / size } else { pos.y / size - 1 };
             let z = if pos.z >= 0 { pos.z / size } else { pos.z / size - 1 };
             let chunk_pos = IVec3::new(x, y, z);
-            if let Some(chunk) = loaded_chunks.arc_map.get(&chunk_pos) {
-                if let Some(chunk) = chunk.upgrade() {
-                    info!(
-                        "Block {}, {}, {}, {:?}",
-                        pos,
-                        chunk_pos,
-                        offset,
-                        chunk.read().unwrap().cubes[offset.x as usize][offset.y as usize][offset.z as usize]
-                    );
-                    if chunk.read().unwrap().cubes[offset.x as usize][offset.y as usize][offset.z as usize]
-                        != Block::Air
-                    {
-                        //Rewind for placement
-                        //TODO abstract over place and remove to update neighbors on remove and avoid write/unwrap everywhere
-                        chunk.write().unwrap().cubes[offset.x as usize][offset.y as usize][offset.z as usize] =
-                            Block::Air;
-                        chunk.write().unwrap().dirty = true;
-                        return;
-                    }
+            if let Some(chunk) = loaded_chunks.ent_map.get(&chunk_pos) {
+                let chunk = comps.get(*chunk).unwrap();
+                info!(
+                    "Block {}, {}, {}, {:?}",
+                    pos,
+                    chunk_pos,
+                    offset,
+                    chunk.read_block(offset)
+                );
+                if chunk.read_block(offset) != Block::Air {
+                    //Rewind for placement
+                    chunk.write_block(offset, Block::Red);
+                    return;
                 }
             }
         }
@@ -143,7 +145,7 @@ fn main() {
         })
         .add_plugins(DefaultPlugins)
         .add_plugin(MaterialPlugin::<CustomMaterial>::default())
-        //.add_plugin(WorldInspectorPlugin::default())
+        .add_plugin(WorldInspectorPlugin::default())
         .add_plugin(WireframePlugin)
         .add_plugin(NoCameraPlayerPlugin)
         .add_startup_system(spawn_camera)
@@ -161,34 +163,31 @@ fn main() {
 
 fn apply_function_to_blocks<F>(chunk: &ChunkComp, mut function: F)
 where
-    F: FnMut(&mut Block, [Option<Block>; 6]) -> bool,
+    F: FnMut(&Block, [Option<Block>; 6]) -> Option<Block>,
 {
-    for z in 0..CHUNK_SIZE as isize {
-        for y in 0..CHUNK_SIZE as isize {
-            for x in 0..CHUNK_SIZE as isize {
-                let neighbors = chunk.chunk.read().unwrap().get_block_neighbors(x, y, z);
+    for z in 0..CHUNK_SIZE {
+        for y in 0..CHUNK_SIZE {
+            for x in 0..CHUNK_SIZE {
+                let neighbors = chunk.read_chunk().get_block_neighbors(x, y, z);
                 //No deadlocks because only write when you know you are done reading
-                if function(
-                    &mut chunk.chunk.write().unwrap().cubes[x as usize][y as usize][z as usize],
-                    neighbors,
-                ) {
-                    chunk.chunk.write().unwrap().dirty = true;
+                if let Some(block) = function(&chunk.read_block_xyz(x, y, z), neighbors) {
+                    chunk.write_dirty(true);
+                    chunk.write_block_xyz(x as usize, y as usize, z as usize, block)
                 }
             }
         }
     }
 }
 
-fn update_dirt(block: &mut Block, neighbors: [Option<Block>; 6]) -> bool {
+fn update_dirt(block: &Block, neighbors: [Option<Block>; 6]) -> Option<Block> {
     if matches!(block, Block::Grass) {
         if let Some(top) = neighbors[Direction::Top] {
             if !matches!(top, Block::Air) {
-                *block = Block::Dirt;
-                return true;
+                return Some(Block::Dirt);
             }
         }
     }
-    false
+    None
 }
 
 fn camera_follow(

@@ -85,7 +85,8 @@ fn create_mesh_faces(chunk: &Chunk, mesh_description: &mut MeshDescription) {
             for x in 0..CHUNK_SIZE as isize {
                 let current_block = chunk.get_block(x, y, z).unwrap();
                 let [front_block, back_block, left_block, right_block, top_block, bottom_block] =
-                    chunk.get_block_neighbors(x, y, z);
+                    chunk.get_block_neighbors(x as usize, y as usize, z as usize);
+
                 if current_block.is_filled() && (left_block.is_none() || !left_block.unwrap().is_filled()) {
                     left_slices[z as usize].blocks[x as usize][y as usize] = current_block;
                 }
@@ -305,7 +306,8 @@ fn create_mesh_faces_old(chunk: &Chunk, mesh_description: &mut MeshDescription) 
             for x in 0..CHUNK_SIZE as isize {
                 let current_block = chunk.get_block(x, y, z).unwrap();
                 let [front_block, back_block, left_block, right_block, top_block, bottom_block] =
-                    chunk.get_block_neighbors(x, y, z);
+                    chunk.get_block_neighbors(x as usize, y as usize, z as usize);
+
                 if current_block.is_filled() && (front_block.is_none() || !front_block.unwrap().is_filled()) {
                     add_face(
                         mesh_description,

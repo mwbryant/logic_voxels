@@ -22,9 +22,6 @@ use crate::{
 // Not a very robust design
 #[derive(Default)]
 pub struct LoadedChunks {
-    pub arc_map: HashMap<IVec3, Weak<RwLock<Chunk>>>,
-    //XXX the ent is only valid if the arc is valid...
-    //Maybe, it depends on the usage
     pub ent_map: HashMap<IVec3, Entity>,
 }
 
@@ -81,33 +78,29 @@ pub fn spawn_chunk_meshes(
             let pos = CHUNK_SIZE as i32 * BLOCK_SIZE as i32 * chunk.pos;
 
             let arc = Arc::new(RwLock::new(chunk));
-            loaded_chunks.arc_map.insert(chunk_pos, Arc::downgrade(&arc));
             loaded_chunks.ent_map.insert(chunk_pos, ent);
+            let arc = ChunkComp::new(arc);
 
             fn connect_neighbor(
                 pos: IVec3,
                 dir: Direction,
                 loaded_chunks: &ResMut<LoadedChunks>,
                 chunks: &Query<&ChunkComp>,
-                arc: &Arc<RwLock<Chunk>>,
+                comp: &ChunkComp,
                 spawned_this_frame: &HashMap<Entity, ChunkComp>,
             ) {
-                if loaded_chunks.arc_map.contains_key(&pos) {
+                if loaded_chunks.ent_map.contains_key(&pos) {
                     //Set this chunks top neighbor
-                    arc.write().unwrap().neighbors[dir] = loaded_chunks.arc_map[&pos].clone();
                     //Set the top neighbors bottom to this chunk
                     if let Ok(neighbor) = chunks.get(loaded_chunks.ent_map[&pos]) {
-                        neighbor.chunk.write().unwrap().neighbors[dir.opposite()] = Arc::downgrade(arc);
+                        comp.write_neighbor(dir, neighbor);
+                        neighbor.write_neighbor(dir.opposite(), comp);
                     } else {
                         //Spawned this frame
-                        spawned_this_frame[&loaded_chunks.ent_map[&pos]]
-                            .chunk
-                            .write()
-                            .unwrap()
-                            .neighbors[dir.opposite()] = Arc::downgrade(arc);
+                        let neighbor = &spawned_this_frame[&loaded_chunks.ent_map[&pos]];
+                        comp.write_neighbor(dir, neighbor);
+                        neighbor.write_neighbor(dir.opposite(), comp);
                     }
-                } else {
-                    //info!("No neighbor");
                 }
             }
 
@@ -162,20 +155,18 @@ pub fn spawn_chunk_meshes(
                 &spawned_this_frame,
             );
 
-            commands
-                .entity(ent)
-                .insert_bundle(MaterialMeshBundle {
-                    mesh: meshes.add(mesh),
-                    //mesh: meshes.add(shape::Box::default().into()),
-                    material: materials.add(CustomMaterial {
-                        textures: texture.0.clone(),
-                    }),
-                    transform: Transform::from_xyz(pos.x as f32, pos.y as f32, pos.z as f32),
+            commands.entity(ent).insert_bundle(MaterialMeshBundle {
+                mesh: meshes.add(mesh),
+                //mesh: meshes.add(shape::Box::default().into()),
+                material: materials.add(CustomMaterial {
+                    textures: texture.0.clone(),
+                }),
+                transform: Transform::from_xyz(pos.x as f32, pos.y as f32, pos.z as f32),
 
-                    ..default()
-                })
-                .insert(Wireframe);
-            spawned_this_frame.insert(ent, ChunkComp { chunk: arc });
+                ..default()
+            });
+            //.insert(Wireframe);
+            spawned_this_frame.insert(ent, arc);
 
             commands.entity(ent).remove::<CreateChunkTask>();
             updates += 1;
