@@ -24,10 +24,16 @@ pub fn update_dirty_chunks(
     }
 }
 
-pub fn update_dirt_sys(chunks: Query<&ChunkComp>, input: Res<Input<KeyCode>>) {
+pub fn apply_buffered_chunk_writes(mut chunks: Query<&mut ChunkComp>) {
+    chunks.par_for_each_mut(5, |mut chunk| {
+        chunk.apply_buffered_writes();
+    });
+}
+
+pub fn update_dirt_sys(mut chunks: Query<&mut ChunkComp>, input: Res<Input<KeyCode>>) {
     if input.just_pressed(KeyCode::P) {
-        chunks.par_for_each(5, |chunk| {
-            let _span = info_span!("Dirt update", name = "Dirt Update").entered();
+        chunks.par_for_each_mut(5, |mut chunk| {
+            //let _span = info_span!("Dirt update", name = "Dirt Update").entered();
             chunk.apply_function_to_blocks(update_dirt);
         });
     }

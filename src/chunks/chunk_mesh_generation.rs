@@ -72,9 +72,9 @@ fn create_mesh_faces(chunk: &Chunk, mesh_description: &mut MeshDescription) {
     let mut right_slices = [Sheet::default(); CHUNK_SIZE];
     let mut front_slices = [Sheet::default(); CHUNK_SIZE];
     let mut back_slices = [Sheet::default(); CHUNK_SIZE];
-    for z in 0..CHUNK_SIZE as isize {
+    for x in 0..CHUNK_SIZE as isize {
         for y in 0..CHUNK_SIZE as isize {
-            for x in 0..CHUNK_SIZE as isize {
+            for z in 0..CHUNK_SIZE as isize {
                 let current_block = chunk.get_block(x, y, z).unwrap();
                 let [front_block, back_block, left_block, right_block, top_block, bottom_block] =
                     chunk.get_block_neighbors(x as usize, y as usize, z as usize);
@@ -100,27 +100,42 @@ fn create_mesh_faces(chunk: &Chunk, mesh_description: &mut MeshDescription) {
             }
         }
     }
-    for z in 0..CHUNK_SIZE as isize {
-        greedy(&back_slices[z as usize], Direction::Back, mesh_description, z as usize);
+    for index in 0..CHUNK_SIZE as isize {
         greedy(
-            &front_slices[z as usize],
+            &back_slices[index as usize],
+            Direction::Back,
+            mesh_description,
+            index as usize,
+        );
+        greedy(
+            &front_slices[index as usize],
             Direction::Front,
             mesh_description,
-            z as usize,
+            index as usize,
         );
-        greedy(&left_slices[z as usize], Direction::Left, mesh_description, z as usize);
         greedy(
-            &right_slices[z as usize],
+            &left_slices[index as usize],
+            Direction::Left,
+            mesh_description,
+            index as usize,
+        );
+        greedy(
+            &right_slices[index as usize],
             Direction::Right,
             mesh_description,
-            z as usize,
+            index as usize,
         );
-        greedy(&top_slices[z as usize], Direction::Top, mesh_description, z as usize);
         greedy(
-            &bottom_slices[z as usize],
+            &top_slices[index as usize],
+            Direction::Top,
+            mesh_description,
+            index as usize,
+        );
+        greedy(
+            &bottom_slices[index as usize],
             Direction::Bottom,
             mesh_description,
-            z as usize,
+            index as usize,
         );
     }
 }
@@ -293,9 +308,9 @@ fn create_greedy_face(
 
 #[allow(dead_code)]
 fn create_mesh_faces_old(chunk: &Chunk, mesh_description: &mut MeshDescription) {
-    for z in 0..CHUNK_SIZE as isize {
+    for x in 0..CHUNK_SIZE as isize {
         for y in 0..CHUNK_SIZE as isize {
-            for x in 0..CHUNK_SIZE as isize {
+            for z in 0..CHUNK_SIZE as isize {
                 let current_block = chunk.get_block(x, y, z).unwrap();
                 let [front_block, back_block, left_block, right_block, top_block, bottom_block] =
                     chunk.get_block_neighbors(x as usize, y as usize, z as usize);

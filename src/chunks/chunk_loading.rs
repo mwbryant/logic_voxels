@@ -21,9 +21,9 @@ fn gen_chunk(chunk_x: f32, chunk_y: f32, chunk_z: f32) -> Chunk {
     let mut chunk = Chunk::default();
     let perlin = Perlin::new();
 
-    for z in 0..CHUNK_SIZE {
-        for x in 0..CHUNK_SIZE {
-            for y in 0..CHUNK_SIZE {
+    for x in 0..CHUNK_SIZE {
+        for y in 0..CHUNK_SIZE {
+            for z in 0..CHUNK_SIZE {
                 let value = (perlin.get([
                     (x as f64 + chunk_x as f64) / 21.912,
                     (y as f64 + chunk_y as f64) / 29.312,

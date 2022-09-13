@@ -134,7 +134,7 @@ fn main() {
             width: 1280.,
             height: 720.,
             title: "Voxel Tests".to_string(),
-            present_mode: PresentMode::Immediate,
+            //present_mode: PresentMode::Immediate,
             resizable: false,
             ..Default::default()
         })
@@ -154,6 +154,7 @@ fn main() {
         .add_system(click_detection)
         .add_system(click_to_break)
         .add_system(click_to_place)
+        .add_system_to_stage(CoreStage::PostUpdate, apply_buffered_chunk_writes)
         .init_resource::<LoadedChunks>()
         .add_startup_system_to_stage(StartupStage::PreStartup, load_chunk_texture)
         .add_startup_system(initial_chunk_spawning)

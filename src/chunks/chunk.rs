@@ -2,20 +2,43 @@ use std::sync::{Arc, RwLock, Weak};
 
 use crate::prelude::*;
 
-#[derive(Component, Clone)]
+#[derive(Component)]
 pub struct ChunkComp {
     chunk: Arc<RwLock<Chunk>>,
+    buffered_writes: Vec<BufferedWrite>,
+}
+
+pub struct BufferedWrite {
+    offset: IVec3,
+    to_write: Block,
 }
 
 impl ChunkComp {
     pub fn new(chunk: Arc<RwLock<Chunk>>) -> Self {
-        ChunkComp { chunk }
+        ChunkComp {
+            chunk,
+            buffered_writes: Vec::default(),
+        }
     }
     //These functions prevent deadlocks, in reality all that matters is writes finish so a pub read, private write would be nice
     pub fn write_block(&self, index: IVec3, block: Block) {
         //There's really no point in bounds checking this index, a logic error trying to write the wrong block should panic
         //Maybe one day there will be a use for a varient that returns a recoverable error
         self.write_block_xyz(index.x as usize, index.y as usize, index.z as usize, block);
+    }
+
+    pub fn buffered_write(&mut self, index: IVec3, block: Block) {
+        self.buffered_writes.push(BufferedWrite {
+            offset: index,
+            to_write: block,
+        });
+    }
+
+    pub fn apply_buffered_writes(&mut self) {
+        for write in self.buffered_writes.iter() {
+            self.write_block(write.offset, write.to_write);
+        }
+        self.buffered_writes.clear();
     }
 
     pub fn write_block_xyz(&self, x: usize, y: usize, z: usize, block: Block) {
@@ -61,16 +84,32 @@ impl ChunkComp {
         self.chunk.write().unwrap().neighbors[dir] = neighbor.as_neighbor();
     }
 
-    pub fn apply_function_to_blocks<F>(&self, mut function: F)
+    //~16-18 ms to pre-read neighbors
+    //~20-22 ms to read as you go
+    #[allow(clippy::needless_range_loop)]
+    pub fn apply_function_to_blocks<F>(&mut self, mut function: F)
     where
         F: FnMut(&Block, [Option<Block>; 6]) -> Option<Block>,
     {
-        for z in 0..CHUNK_SIZE {
+        let chunk = self.read_chunk();
+        let mut neighbors = [[[[None; 6]; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE];
+        for x in 0..CHUNK_SIZE {
             for y in 0..CHUNK_SIZE {
-                for x in 0..CHUNK_SIZE {
-                    let neighbors = self.read_chunk().get_block_neighbors(x, y, z);
-                    if let Some(block) = function(&self.read_block_xyz(x, y, z), neighbors) {
-                        self.write_block_xyz(x as usize, y as usize, z as usize, block)
+                for z in 0..CHUNK_SIZE {
+                    //TODO this can be better, a lot of repeated neighbor getting
+                    //let neighbors = self.read_chunk().get_block_neighbors(x, y, z);
+                    neighbors[x][y][z] = chunk.get_block_neighbors(x, y, z);
+                }
+            }
+        }
+        drop(chunk);
+        for x in 0..CHUNK_SIZE {
+            for y in 0..CHUNK_SIZE {
+                for z in 0..CHUNK_SIZE {
+                    if let Some(block) = function(&self.read_block_xyz(x, y, z), neighbors[x][y][z]) {
+                        //TODO perf check buffered versus normal write
+                        //self.write_block(IVec3::new(x as i32, y as i32, z as i32), block)
+                        self.buffered_write(IVec3::new(x as i32, y as i32, z as i32), block)
                     }
                 }
             }
