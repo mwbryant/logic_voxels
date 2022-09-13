@@ -30,14 +30,12 @@ pub fn update_dirty_chunks(
 }
 
 pub fn update_dirt_sys(chunks: Query<&ChunkComp>, input: Res<Input<KeyCode>>) {
-    /*
-    if input.just_pressed(KeyCode::Space) {
+    if input.just_pressed(KeyCode::P) {
         chunks.par_for_each(5, |chunk| {
             let _span = info_span!("Dirt update", name = "Dirt Update").entered();
             chunk.apply_function_to_blocks(update_dirt);
         });
     }
-    */
 }
 
 pub fn update_dirt(block: &Block, neighbors: [Option<Block>; 6]) -> Option<Block> {

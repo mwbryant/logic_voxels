@@ -1,7 +1,6 @@
-use std::sync::{Arc, RwLock, Weak};
+use std::sync::{Arc, RwLock};
 
 use bevy::{
-    pbr::wireframe::Wireframe,
     prelude::*,
     tasks::{AsyncComputeTaskPool, Task},
     utils::HashMap,
@@ -15,7 +14,7 @@ use crate::{
     chunk_mesh_generation::create_chunk_mesh,
     direction::Direction,
     material::CustomMaterial,
-    ChunkTexture, BLOCK_SIZE, CHUNK_SIZE, MAX_CHUNK_UPDATES_PER_FRAME, WORLD_SIZE,
+    ChunkTexture, CHUNK_SIZE, MAX_CHUNK_UPDATES_PER_FRAME, WORLD_SIZE,
 };
 
 //XXX maybe a memory leak because unloaded chunks are never removed
@@ -34,16 +33,16 @@ fn gen_chunk(chunk_x: f32, chunk_y: f32, chunk_z: f32) -> Chunk {
         for x in 0..CHUNK_SIZE {
             for y in 0..CHUNK_SIZE {
                 let value = (perlin.get([
-                    (x as f64 * BLOCK_SIZE as f64 + chunk_x as f64) / 21.912,
-                    (y as f64 * BLOCK_SIZE as f64 + chunk_y as f64) / 29.312,
-                    (z as f64 * BLOCK_SIZE as f64 + chunk_z as f64) / 23.253,
+                    (x as f64 + chunk_x as f64) / 21.912,
+                    (y as f64 + chunk_y as f64) / 29.312,
+                    (z as f64 + chunk_z as f64) / 23.253,
                 ]) + 1.0)
                     / 2.0
                     + (0.12
                         * perlin.get([
-                            (x as f64 * BLOCK_SIZE as f64 + chunk_x as f64) / 3.912,
-                            (y as f64 * BLOCK_SIZE as f64 + chunk_y as f64) / 2.312,
-                            (z as f64 * BLOCK_SIZE as f64 + chunk_z as f64) / 3.253,
+                            (x as f64 + chunk_x as f64) / 3.912,
+                            (y as f64 + chunk_y as f64) / 2.312,
+                            (z as f64 + chunk_z as f64) / 3.253,
                         ])
                         + 0.06);
                 //if value >= (y as f32 / CHUNK_SIZE as f32) as f64 || y == 0 {
@@ -59,7 +58,6 @@ fn gen_chunk(chunk_x: f32, chunk_y: f32, chunk_z: f32) -> Chunk {
 #[derive(Component)]
 pub struct CreateChunkTask(Task<(Chunk, Mesh)>);
 
-//FIXME can only spawn 1 chunk per frame so the chunk comp queries stay updated
 pub fn spawn_chunk_meshes(
     mut commands: Commands,
     mut tasks: Query<(Entity, &mut CreateChunkTask)>,
@@ -75,7 +73,7 @@ pub fn spawn_chunk_meshes(
     for (ent, mut task) in &mut tasks {
         if let Some((chunk, mesh)) = future::block_on(future::poll_once(&mut task.0)) {
             let chunk_pos = chunk.pos;
-            let pos = CHUNK_SIZE as i32 * BLOCK_SIZE as i32 * chunk.pos;
+            let pos = CHUNK_SIZE as i32 * chunk.pos;
 
             let arc = Arc::new(RwLock::new(chunk));
             loaded_chunks.ent_map.insert(chunk_pos, ent);
@@ -189,9 +187,9 @@ pub fn initial_chunk_spawning(mut commands: Commands) {
             for z in 0..chunks_to_spawn {
                 let task = thread_pool.spawn(async move {
                     let _span = info_span!("Chunk Generation Task", name = "Chunk Generation Task").entered();
-                    let chunk_x = x as f32 * CHUNK_SIZE as f32 * BLOCK_SIZE;
-                    let chunk_y = y as f32 * CHUNK_SIZE as f32 * BLOCK_SIZE;
-                    let chunk_z = z as f32 * CHUNK_SIZE as f32 * BLOCK_SIZE;
+                    let chunk_x = x as f32 * CHUNK_SIZE as f32;
+                    let chunk_y = y as f32 * CHUNK_SIZE as f32;
+                    let chunk_z = z as f32 * CHUNK_SIZE as f32;
                     let mut chunk_data = gen_chunk(chunk_x, chunk_y, chunk_z);
                     chunk_data.pos = IVec3::new(x as i32, y as i32, z as i32);
                     let mesh = create_chunk_mesh(&chunk_data);

@@ -22,14 +22,14 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     out.clip_position = mesh_position_local_to_clip(mesh.model, vec4<f32>(vertex.position, 1.0));
     out.uvs = vec2<f32>(vertex.uvs);
     if (vertex.uvs.x == u32(0)) {
-        out.uvs.x = 0.01;
+        out.uvs.x = 0.001;
     } else {
-        out.uvs.x -= 0.01;
+        out.uvs.x -= 0.001;
     }
     if (vertex.uvs.y == u32(0)) {
-        out.uvs.y = 0.01;
+        out.uvs.y = 0.001;
     } else {
-        out.uvs.y -= 0.01;
+        out.uvs.y -= 0.001;
     }
 
     out.index = vertex.index;

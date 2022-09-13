@@ -46,7 +46,6 @@ pub struct CustomMaterial {
     #[texture(0, dimension = "2d_array")]
     #[sampler(1)]
     pub textures: Handle<Image>,
-    //FIXME save chunk position then change mesh attributes to use pos as int
 }
 
 impl Material for CustomMaterial {
@@ -65,9 +64,7 @@ impl Material for CustomMaterial {
     ) -> Result<(), SpecializedMeshPipelineError> {
         let vertex_layout = layout.get_layout(&[
             Mesh::ATTRIBUTE_POSITION.at_shader_location(0),
-            //FIXME we don't need this level of detail for normals
             CUSTOM_NORMAL.at_shader_location(1),
-            //FIXME we dont need uvs, just a vertex id
             CUSTOM_UV.at_shader_location(2),
             ATTRIBUTE_TEXTURE_INDEX.at_shader_location(3),
         ]);

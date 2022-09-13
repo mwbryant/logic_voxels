@@ -12,7 +12,7 @@ use bevy::{
     },
 };
 
-use crate::{Chunk, Direction, BLOCK_SIZE, CHUNK_SIZE};
+use crate::{Chunk, Direction, CHUNK_SIZE};
 
 #[derive(Default)]
 pub struct MeshDescription {
@@ -312,11 +312,7 @@ fn create_mesh_faces_old(chunk: &Chunk, mesh_description: &mut MeshDescription) 
                     add_face(
                         mesh_description,
                         Quat::from_axis_angle(Vec3::Y, PI / 2.0),
-                        Vec3::new(
-                            (x as f32 + 0.5) * BLOCK_SIZE,
-                            y as f32 * BLOCK_SIZE,
-                            (z as f32 - 0.5) * BLOCK_SIZE,
-                        ),
+                        Vec3::new(x as f32 + 0.5, y as f32, z as f32 - 0.5),
                         current_block.get_face_index(Direction::Front),
                     );
                 }
@@ -325,11 +321,7 @@ fn create_mesh_faces_old(chunk: &Chunk, mesh_description: &mut MeshDescription) 
                     add_face(
                         mesh_description,
                         Quat::from_axis_angle(Vec3::Y, -PI / 2.0),
-                        Vec3::new(
-                            (x as f32 - 0.5) * BLOCK_SIZE,
-                            y as f32 * BLOCK_SIZE,
-                            (z as f32 - 0.5) * BLOCK_SIZE,
-                        ),
+                        Vec3::new(x as f32 - 0.5, y as f32, z as f32 - 0.5),
                         current_block.get_face_index(Direction::Back),
                     );
                 }
@@ -339,11 +331,7 @@ fn create_mesh_faces_old(chunk: &Chunk, mesh_description: &mut MeshDescription) 
                     add_face(
                         mesh_description,
                         Quat::from_axis_angle(Vec3::X, -PI / 2.0),
-                        Vec3::new(
-                            x as f32 * BLOCK_SIZE,
-                            (y as f32 + 0.5) * BLOCK_SIZE,
-                            (z as f32 - 0.5) * BLOCK_SIZE,
-                        ),
+                        Vec3::new(x as f32, y as f32 + 0.5, z as f32 - 0.5),
                         current_block.get_face_index(Direction::Top),
                     );
                 }
@@ -352,11 +340,7 @@ fn create_mesh_faces_old(chunk: &Chunk, mesh_description: &mut MeshDescription) 
                     add_face(
                         mesh_description,
                         Quat::from_axis_angle(Vec3::X, PI / 2.0),
-                        Vec3::new(
-                            x as f32 * BLOCK_SIZE,
-                            (y as f32 - 0.5) * BLOCK_SIZE,
-                            (z as f32 - 0.5) * BLOCK_SIZE,
-                        ),
+                        Vec3::new(x as f32, y as f32 - 0.5, z as f32 - 0.5),
                         current_block.get_face_index(Direction::Bottom),
                     );
                 }
@@ -365,7 +349,7 @@ fn create_mesh_faces_old(chunk: &Chunk, mesh_description: &mut MeshDescription) 
                     add_face(
                         mesh_description,
                         Quat::from_axis_angle(Vec3::Y, 0.0),
-                        Vec3::new((x as f32) * BLOCK_SIZE, y as f32 * BLOCK_SIZE, (z as f32) * BLOCK_SIZE),
+                        Vec3::new(x as f32, y as f32, z as f32),
                         current_block.get_face_index(Direction::Left),
                     );
                 }
@@ -374,11 +358,7 @@ fn create_mesh_faces_old(chunk: &Chunk, mesh_description: &mut MeshDescription) 
                     add_face(
                         mesh_description,
                         Quat::from_axis_angle(Vec3::Y, PI),
-                        Vec3::new(
-                            (x as f32) * BLOCK_SIZE,
-                            y as f32 * BLOCK_SIZE,
-                            (z as f32 - 1.0) * BLOCK_SIZE,
-                        ),
+                        Vec3::new(x as f32, y as f32, z as f32 - 1.0),
                         current_block.get_face_index(Direction::Right),
                     );
                 }
@@ -390,10 +370,10 @@ fn create_mesh_faces_old(chunk: &Chunk, mesh_description: &mut MeshDescription) 
 #[allow(dead_code)]
 fn add_face(mesh_description: &mut MeshDescription, rotation: Quat, transform: Vec3, face_index: u32) {
     let mut new_verts = [
-        Vec3::new(-BLOCK_SIZE / 2.0, -BLOCK_SIZE / 2.0, 0.0),
-        Vec3::new(BLOCK_SIZE / 2.0, -BLOCK_SIZE / 2.0, 0.0),
-        Vec3::new(BLOCK_SIZE / 2.0, BLOCK_SIZE / 2.0, 0.0),
-        Vec3::new(-BLOCK_SIZE / 2.0, BLOCK_SIZE / 2.0, 0.0),
+        Vec3::new(-1.0 / 2.0, -1.0 / 2.0, 0.0),
+        Vec3::new(1.0 / 2.0, -1.0 / 2.0, 0.0),
+        Vec3::new(1.0 / 2.0, 1.0 / 2.0, 0.0),
+        Vec3::new(-1.0 / 2.0, 1.0 / 2.0, 0.0),
     ];
 
     let mut new_normals = [
