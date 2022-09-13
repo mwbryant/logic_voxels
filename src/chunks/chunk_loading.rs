@@ -1,21 +1,13 @@
 use std::sync::{Arc, RwLock};
 
 use bevy::{
-    prelude::*,
     tasks::{AsyncComputeTaskPool, Task},
     utils::HashMap,
 };
 use futures_lite::future;
 use noise::{NoiseFn, Perlin};
 
-use crate::{
-    block::Block,
-    chunk::{Chunk, ChunkComp},
-    chunk_mesh_generation::create_chunk_mesh,
-    direction::Direction,
-    material::CustomMaterial,
-    ChunkTexture, CHUNK_SIZE, MAX_CHUNK_UPDATES_PER_FRAME, WORLD_SIZE,
-};
+use crate::prelude::*;
 
 //XXX maybe a memory leak because unloaded chunks are never removed
 // Not a very robust design

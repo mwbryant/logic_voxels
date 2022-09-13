@@ -1,8 +1,6 @@
 use std::sync::{Arc, RwLock, Weak};
 
-use bevy::prelude::*;
-
-use crate::{block::Block, direction::Direction, CHUNK_SIZE};
+use crate::prelude::*;
 
 #[derive(Component, Clone)]
 pub struct ChunkComp {

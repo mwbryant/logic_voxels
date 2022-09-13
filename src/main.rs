@@ -1,13 +1,8 @@
 #![allow(clippy::too_many_arguments)]
 
-use chunk_loading::{initial_chunk_spawning, spawn_chunk_meshes, LoadedChunks};
-use chunk_updating::{update_dirt_sys, update_dirty_chunks};
-use direction::Direction;
-
 use bevy::{
     asset::AssetServerSettings,
     pbr::wireframe::WireframePlugin,
-    prelude::*,
     render::{
         render_resource::{AddressMode, FilterMode, SamplerDescriptor},
         texture::ImageSettings,
@@ -16,25 +11,16 @@ use bevy::{
 };
 use bevy_flycam::{FlyCam, NoCameraPlayerPlugin};
 use bevy_inspector_egui::WorldInspectorPlugin;
-use block::Block;
-use chunk::{Chunk, ChunkComp};
 
+use crate::prelude::*;
 use material::{create_array_texture, CustomMaterial};
 
-mod block;
-mod chunk;
-mod chunk_loading;
-mod chunk_mesh_generation;
-mod chunk_updating;
-mod direction;
+mod chunks;
 mod material;
+mod prelude;
 
 #[derive(Component)]
 pub struct FollowCamera;
-
-pub const CHUNK_SIZE: usize = 16;
-pub const WORLD_SIZE: usize = 20;
-pub const MAX_CHUNK_UPDATES_PER_FRAME: usize = 30;
 
 pub struct ClickEvent {
     //TODO track held and stuff

@@ -25,7 +25,6 @@ pub fn create_array_texture(
     if image.texture_descriptor.size.depth_or_array_layers != 1 {
         return;
     }
-    info!("Converting!");
 
     // Create a new array texture asset from the loaded texture.
     let array_layers = 4;

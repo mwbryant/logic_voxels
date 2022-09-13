@@ -1,18 +1,10 @@
 use std::f32::consts::PI;
 
-use crate::{
-    block::Block,
-    material::{ATTRIBUTE_TEXTURE_INDEX, CUSTOM_NORMAL, CUSTOM_UV},
+use crate::prelude::*;
+use bevy::render::{
+    mesh::{Indices, VertexAttributeValues},
+    render_resource::PrimitiveTopology,
 };
-use bevy::{
-    prelude::*,
-    render::{
-        mesh::{Indices, VertexAttributeValues},
-        render_resource::PrimitiveTopology,
-    },
-};
-
-use crate::{Chunk, Direction, CHUNK_SIZE};
 
 #[derive(Default)]
 pub struct MeshDescription {

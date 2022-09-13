@@ -1,11 +1,6 @@
-use bevy::prelude::*;
 use bevy::render::primitives::Aabb;
 
-use crate::block::Block;
-use crate::chunk::ChunkComp;
-use crate::chunk_mesh_generation::create_chunk_mesh;
-use crate::direction::Direction;
-use crate::MAX_CHUNK_UPDATES_PER_FRAME;
+use crate::prelude::*;
 
 pub fn update_dirty_chunks(
     mut commands: Commands,

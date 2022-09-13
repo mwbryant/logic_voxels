@@ -1,4 +1,4 @@
-use crate::direction::Direction;
+use crate::prelude::*;
 
 #[derive(Default, Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Block {
