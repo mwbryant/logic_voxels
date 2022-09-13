@@ -1,7 +1,7 @@
 #![allow(clippy::too_many_arguments)]
 
 use chunk_loading::{initial_chunk_spawning, spawn_chunk_meshes, LoadedChunks};
-use chunk_updating::{update_dirt, update_dirt_sys, update_dirty_chunks};
+use chunk_updating::{update_dirt_sys, update_dirty_chunks};
 use direction::Direction;
 
 use bevy::{
@@ -9,7 +9,6 @@ use bevy::{
     pbr::wireframe::WireframePlugin,
     prelude::*,
     render::{
-        primitives::Aabb,
         render_resource::{AddressMode, FilterMode, SamplerDescriptor},
         texture::ImageSettings,
     },
@@ -19,7 +18,7 @@ use bevy_flycam::{FlyCam, NoCameraPlayerPlugin};
 use bevy_inspector_egui::WorldInspectorPlugin;
 use block::Block;
 use chunk::{Chunk, ChunkComp};
-use chunk_mesh_generation::create_chunk_mesh;
+
 use material::{create_array_texture, CustomMaterial};
 
 mod block;
@@ -36,17 +35,56 @@ pub struct FollowCamera;
 pub const CHUNK_SIZE: usize = 16;
 pub const WORLD_SIZE: usize = 20;
 pub const MAX_CHUNK_UPDATES_PER_FRAME: usize = 30;
-pub const BLOCK_SIZE: f32 = 1.0;
+
+pub struct ClickEvent {
+    //TODO track held and stuff
+    button: MouseButton,
+    world_pos: IVec3,
+    prev_pos: IVec3,
+}
+
+fn click_to_break(
+    loaded_chunks: Res<LoadedChunks>,
+    comps: Query<&ChunkComp>,
+    mut click_reader: EventReader<ClickEvent>,
+) {
+    for ev in click_reader.iter() {
+        if ev.button == MouseButton::Left {
+            let (chunk_pos, offset) = Chunk::world_to_chunk(ev.world_pos);
+            if let Some(chunk) = loaded_chunks.ent_map.get(&chunk_pos) {
+                let chunk = comps.get(*chunk).unwrap();
+                chunk.write_block(offset, Block::Air);
+            }
+        }
+    }
+}
+
+fn click_to_place(
+    loaded_chunks: Res<LoadedChunks>,
+    comps: Query<&ChunkComp>,
+    mut click_reader: EventReader<ClickEvent>,
+) {
+    for ev in click_reader.iter() {
+        if ev.button == MouseButton::Right {
+            let (chunk_pos, offset) = Chunk::world_to_chunk(ev.prev_pos);
+            if let Some(chunk) = loaded_chunks.ent_map.get(&chunk_pos) {
+                let chunk = comps.get(*chunk).unwrap();
+                chunk.write_block(offset, Block::Red);
+            }
+        }
+    }
+}
 
 fn click_detection(
     mouse: Res<Input<MouseButton>>,
     transform: Query<&Transform, With<Camera3d>>,
     loaded_chunks: Res<LoadedChunks>,
     comps: Query<&ChunkComp>,
+    mut click_writer: EventWriter<ClickEvent>,
 ) {
     let transform = transform.single();
     let range = 9.0;
-    if mouse.just_pressed(MouseButton::Left) {
+    if mouse.any_just_pressed([MouseButton::Left, MouseButton::Right]) {
         let end = transform.translation + transform.forward() * range;
         let mut current = transform.translation;
 
@@ -56,34 +94,32 @@ fn click_detection(
 
         let inc = diff / steps;
 
-        let size = CHUNK_SIZE as i32;
-
         for _i in 0..(steps as usize) {
             let block_pos = current - Vec3::ONE / 2.0;
-            let pos = block_pos.round().as_ivec3();
+            let world_pos = block_pos.round().as_ivec3();
+            let (chunk_pos, offset) = Chunk::world_to_chunk(world_pos);
 
-            let offset = IVec3::new(pos.x.rem_euclid(size), pos.y.rem_euclid(size), pos.z.rem_euclid(size));
-            let x = if pos.x >= 0 { pos.x / size } else { pos.x / size - 1 };
-            let y = if pos.y >= 0 { pos.y / size } else { pos.y / size - 1 };
-            let z = if pos.z >= 0 { pos.z / size } else { pos.z / size - 1 };
-            let chunk_pos = IVec3::new(x, y, z);
             if let Some(chunk) = loaded_chunks.ent_map.get(&chunk_pos) {
                 let chunk = comps.get(*chunk).unwrap();
 
                 if chunk.read_block(offset) != Block::Air {
-                    chunk.write_block(offset, Block::Air);
                     //Rewind for placement
                     let block_pos = current - Vec3::ONE / 2.0 - inc;
-                    let pos = block_pos.round().as_ivec3();
-
-                    let offset = IVec3::new(pos.x.rem_euclid(size), pos.y.rem_euclid(size), pos.z.rem_euclid(size));
-                    let x = if pos.x >= 0 { pos.x / size } else { pos.x / size - 1 };
-                    let y = if pos.y >= 0 { pos.y / size } else { pos.y / size - 1 };
-                    let z = if pos.z >= 0 { pos.z / size } else { pos.z / size - 1 };
-                    let chunk_pos = IVec3::new(x, y, z);
-                    if let Some(chunk) = loaded_chunks.ent_map.get(&chunk_pos) {
-                        let chunk = comps.get(*chunk).unwrap();
-                        chunk.write_block(offset, Block::Red);
+                    let prev_pos = block_pos.round().as_ivec3();
+                    if mouse.just_pressed(MouseButton::Left) {
+                        click_writer.send(ClickEvent {
+                            button: MouseButton::Left,
+                            world_pos,
+                            prev_pos,
+                        });
+                    }
+                    //gross
+                    if mouse.just_pressed(MouseButton::Right) {
+                        click_writer.send(ClickEvent {
+                            button: MouseButton::Right,
+                            world_pos,
+                            prev_pos,
+                        });
                     }
                     return;
                 }
@@ -118,6 +154,7 @@ fn main() {
             watch_for_changes: true,
             ..default()
         })
+        .add_event::<ClickEvent>()
         .add_plugins(DefaultPlugins)
         .add_plugin(MaterialPlugin::<CustomMaterial>::default())
         .add_plugin(WorldInspectorPlugin::default())
@@ -127,6 +164,8 @@ fn main() {
         .add_system(create_array_texture)
         .add_system(spawn_chunk_meshes)
         .add_system(click_detection)
+        .add_system(click_to_break)
+        .add_system(click_to_place)
         .init_resource::<LoadedChunks>()
         .add_startup_system_to_stage(StartupStage::PreStartup, load_chunk_texture)
         .add_startup_system(initial_chunk_spawning)
