@@ -172,11 +172,11 @@ pub fn spawn_chunk_meshes(
 
 pub fn initial_chunk_spawning(mut commands: Commands) {
     let thread_pool = AsyncComputeTaskPool::get();
-    let chunks_to_spawn = WORLD_SIZE;
+    let chunks_to_spawn = (WORLD_SIZE / 2) as i32;
 
-    for x in 0..chunks_to_spawn {
-        for y in 0..chunks_to_spawn {
-            for z in 0..chunks_to_spawn {
+    for x in -chunks_to_spawn..chunks_to_spawn {
+        for y in -chunks_to_spawn..chunks_to_spawn {
+            for z in -chunks_to_spawn..chunks_to_spawn {
                 let task = thread_pool.spawn(async move {
                     let _span = info_span!("Chunk Generation Task", name = "Chunk Generation Task").entered();
                     let chunk_x = x as f32 * CHUNK_SIZE as f32;

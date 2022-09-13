@@ -55,7 +55,9 @@ fn click_to_place(
             let (chunk_pos, offset) = Chunk::world_to_chunk(ev.prev_pos);
             if let Some(chunk) = loaded_chunks.ent_map.get(&chunk_pos) {
                 let chunk = comps.get(*chunk).unwrap();
-                chunk.write_block(offset, Block::Red);
+                if chunk.read_block(offset) == Block::Air {
+                    chunk.write_block(offset, Block::Red);
+                }
             }
         }
     }
@@ -222,30 +224,4 @@ fn spawn_camera(mut commands: Commands) {
                 ..default()
             });
         });
-    //directional 'sun' light
-    const HALF_SIZE: f32 = 40.0;
-    commands
-        .spawn_bundle(DirectionalLightBundle {
-            directional_light: DirectionalLight {
-                // Configure the projection to better fit the scene
-                shadow_projection: OrthographicProjection {
-                    left: -HALF_SIZE,
-                    right: HALF_SIZE,
-                    bottom: -HALF_SIZE,
-                    top: HALF_SIZE,
-                    near: -10.0 * HALF_SIZE,
-                    far: 10.0 * HALF_SIZE,
-                    ..default()
-                },
-                shadows_enabled: false,
-                ..default()
-            },
-            transform: Transform {
-                translation: Vec3::new(30.0, 2.0, 0.0),
-                rotation: Quat::from_euler(EulerRot::XYZ, 0.3, -2.6, 0.0),
-                ..default()
-            },
-            ..default()
-        })
-        .insert(FollowCamera);
 }
