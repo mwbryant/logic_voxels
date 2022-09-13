@@ -135,12 +135,25 @@ impl Chunk {
     pub fn world_to_chunk(pos: IVec3) -> (IVec3, IVec3) {
         let size = CHUNK_SIZE as i32;
         let offset = IVec3::new(pos.x.rem_euclid(size), pos.y.rem_euclid(size), pos.z.rem_euclid(size));
-        let x = if pos.x >= 0 { pos.x / size } else { pos.x / size - 1 };
-        let y = if pos.y >= 0 { pos.y / size } else { pos.y / size - 1 };
-        let z = if pos.z >= 0 { pos.z / size } else { pos.z / size - 1 };
+        let x = if pos.x >= 0 {
+            pos.x / size
+        } else {
+            (pos.x + 1) / size - 1
+        };
+        let y = if pos.y >= 0 {
+            pos.y / size
+        } else {
+            (pos.y + 1) / size - 1
+        };
+        let z = if pos.z >= 0 {
+            pos.z / size
+        } else {
+            (pos.z + 1) / size - 1
+        };
         let chunk_pos = IVec3::new(x, y, z);
         (chunk_pos, offset)
     }
+
     pub fn get_block(&self, x: isize, y: isize, z: isize) -> Option<Block> {
         if Self::index_inbounds(x) && Self::index_inbounds(y) && Self::index_inbounds(z) {
             Some(self.cubes[x as usize][y as usize][z as usize])

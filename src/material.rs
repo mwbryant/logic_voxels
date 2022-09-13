@@ -27,7 +27,7 @@ pub fn create_array_texture(
     }
 
     // Create a new array texture asset from the loaded texture.
-    let array_layers = 4;
+    let array_layers = image.texture_descriptor.size.height / image.texture_descriptor.size.width;
     image.reinterpret_stacked_2d_as_array(array_layers);
 }
 
