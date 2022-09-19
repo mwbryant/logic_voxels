@@ -167,7 +167,7 @@ fn main() {
         .add_system_to_stage(CoreStage::PostUpdate, apply_buffered_chunk_writes)
         .init_resource::<LoadedChunks>()
         .add_startup_system_to_stage(StartupStage::PreStartup, load_chunk_texture)
-        .add_startup_system(initial_chunk_spawning)
+        .add_system(initial_chunk_spawning)
         .add_system(load_server_chunks)
         .add_system(ping_test)
         .add_system(camera_follow)

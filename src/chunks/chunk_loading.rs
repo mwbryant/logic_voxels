@@ -190,6 +190,11 @@ pub fn spawn_chunk_meshes(
             let pos = CHUNK_SIZE as i32 * chunk.pos;
 
             let arc = Arc::new(RwLock::new(chunk));
+            //Check doesn't already exists!
+            if let Some(chunk) = loaded_chunks.ent_map.remove(&chunk_pos) {
+                error!("I already have this chunk loaded! {:?}", chunk_pos);
+                commands.entity(chunk).despawn_recursive();
+            }
             loaded_chunks.ent_map.insert(chunk_pos, ent);
             let arc = ChunkComp::new(arc);
 
@@ -311,7 +316,21 @@ pub fn server_create_chunks(
     mut commands: Commands,
     messages: Res<CurrentServerMessages>,
     mut server: ResMut<RenetServer>,
+    mut queued_requests: Local<Vec<(u64, IVec3)>>,
 ) {
+    queued_requests.retain(|(id, pos)| {
+        let chunk_x = pos.x as f32 * CHUNK_SIZE as f32;
+        let chunk_y = pos.y as f32 * CHUNK_SIZE as f32;
+        let chunk_z = pos.z as f32 * CHUNK_SIZE as f32;
+        let mut chunk_data = gen_chunk(chunk_x, chunk_y, chunk_z);
+        chunk_data.pos = *pos;
+        if server.can_send_message(*id, Channel::Block.id()) {
+            ServerBlockMessage::Chunk(chunk_data).send(&mut server, *id);
+            info!("Sending Chunk! {}", *pos);
+            return false;
+        }
+        true
+    });
     for message in messages.iter() {
         //FIXME detect if I've already created this chunk
         if let (id, ClientMessage::RequestChunk(pos)) = message {
@@ -321,20 +340,31 @@ pub fn server_create_chunks(
             let mut chunk_data = gen_chunk(chunk_x, chunk_y, chunk_z);
             chunk_data.pos = *pos;
             info!("Sending Chunk! {}", pos);
-            ServerBlockMessage::Chunk(chunk_data).send(&mut server, *id);
+            if server.can_send_message(*id, Channel::Block.id()) {
+                ServerBlockMessage::Chunk(chunk_data).send(&mut server, *id);
+            } else {
+                error!("CANT SEND CHUNK");
+                queued_requests.push((*id, *pos));
+            }
         }
     }
 }
 
-pub fn initial_chunk_spawning(mut commands: Commands, mut client: ResMut<RenetClient>) {
-    let chunks_to_spawn = (WORLD_SIZE / 2) as i32 + 1;
+pub fn initial_chunk_spawning(mut commands: Commands, mut client: ResMut<RenetClient>, input: Res<Input<KeyCode>>) {
+    if input.just_pressed(KeyCode::L) {
+        if client.is_connected() {
+            let chunks_to_spawn = (WORLD_SIZE / 2) as i32 + 1;
 
-    for x in -chunks_to_spawn..chunks_to_spawn {
-        for y in -chunks_to_spawn..chunks_to_spawn {
-            for z in -chunks_to_spawn..chunks_to_spawn {
-                info!("Requesting Chunk {:?}", IVec3::new(x, y, z));
-                ClientMessage::RequestChunk(IVec3::new(x, y, z)).send(&mut client);
+            for x in -chunks_to_spawn..chunks_to_spawn {
+                for y in -chunks_to_spawn..chunks_to_spawn {
+                    for z in -chunks_to_spawn..chunks_to_spawn {
+                        info!("Requesting Chunk {:?}", IVec3::new(x, y, z));
+                        ClientMessage::RequestChunk(IVec3::new(x, y, z)).send(&mut client);
+                    }
+                }
             }
+        } else {
+            error!("Not connected to a server!");
         }
     }
 }

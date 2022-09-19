@@ -60,7 +60,7 @@ pub struct CurrentServerMessages(Vec<(u64, ClientMessage)>);
 
 #[derive(Debug, Default, Deref, DerefMut)]
 pub struct CurrentClientMessages(Vec<ServerMessage>);
-#[derive(Debug, Default, Deref, DerefMut)]
+#[derive(Default, Deref, DerefMut)]
 pub struct CurrentClientBlockMessages(Vec<ServerBlockMessage>);
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -69,7 +69,7 @@ pub enum ServerMessage {
 }
 
 //Enum size is the max message size, so big messages need to be handled seperate
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
 pub enum ServerBlockMessage {
     Chunk(Chunk),
 }
@@ -125,7 +125,11 @@ impl ClientMessage {
         let message = bincode::serialize(self).unwrap();
         match self {
             ClientMessage::Ping | ClientMessage::RequestChunk(..) => {
-                client.send_message(Channel::Reliable.id(), message)
+                if client.can_send_message(Channel::Reliable.id()) {
+                    client.send_message(Channel::Reliable.id(), message)
+                } else {
+                    error!("Cannot send message! {:?}", self);
+                }
             }
         }
     }

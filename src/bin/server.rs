@@ -53,6 +53,7 @@ fn server_recieve_messages(mut server: ResMut<RenetServer>, mut messages: ResMut
         for channel in [Channel::Reliable, Channel::Unreliable] {
             while let Some(message) = server.receive_message(client_id, channel.id()) {
                 let client_message = bincode::deserialize(&message).unwrap();
+                info!("Got message {:?}", client_message);
                 messages.push((client_id, client_message));
             }
         }
