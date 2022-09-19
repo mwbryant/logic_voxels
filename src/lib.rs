@@ -9,6 +9,7 @@ pub use bevy::{
     },
     window::PresentMode,
 };
+use lz4::block::compress;
 
 pub use crate::prelude::*;
 pub use bevy_flycam::{FlyCam, NoCameraPlayerPlugin};
@@ -83,16 +84,19 @@ pub enum ClientMessage {
 impl ServerBlockMessage {
     pub fn send(&self, server: &mut RenetServer, id: u64) {
         let message = bincode::serialize(self).unwrap();
+        let message = compress(&message, None, true).unwrap();
         server.send_message(id, Channel::Block.id(), message);
     }
 
     pub fn broadcast(&self, server: &mut RenetServer) {
         let message = bincode::serialize(self).unwrap();
+        let message = compress(&message, None, true).unwrap();
         server.broadcast_message(Channel::Reliable.id(), message);
     }
 
     pub fn broadcast_except(&self, server: &mut RenetServer, id: u64) {
         let message = bincode::serialize(self).unwrap();
+        let message = compress(&message, None, true).unwrap();
         server.broadcast_message_except(id, Channel::Reliable.id(), message);
     }
 }

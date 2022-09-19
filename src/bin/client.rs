@@ -1,6 +1,7 @@
 use std::{net::UdpSocket, time::SystemTime};
 
 use logic_voxels::*;
+use lz4::block::decompress;
 use strum::IntoEnumIterator;
 
 #[derive(Component)]
@@ -191,6 +192,8 @@ fn client_recieve_messages(
         }
     }
     while let Some(message) = client.receive_message(Channel::Block.id()) {
+        //FIXME this pairs with the compression in the send message, shouldn't be here
+        let message = decompress(&message, None).unwrap();
         let server_message = bincode::deserialize(&message).unwrap();
         block_messages.push(server_message);
     }

@@ -43,7 +43,7 @@ fn main() {
 }
 
 fn janky_cpu_limiting() {
-    std::thread::sleep(Duration::from_millis(10));
+    std::thread::sleep(Duration::from_millis(1));
 }
 
 //Run before update
