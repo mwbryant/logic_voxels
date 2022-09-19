@@ -9,7 +9,7 @@ pub use bevy::{
     },
     window::PresentMode,
 };
-use lz4::block::compress;
+use lz4::block::{compress, CompressionMode};
 
 pub use crate::prelude::*;
 pub use bevy_flycam::{FlyCam, NoCameraPlayerPlugin};
@@ -96,7 +96,8 @@ impl ServerBlockMessage {
 
     pub fn broadcast_except(&self, server: &mut RenetServer, id: u64) {
         let message = bincode::serialize(self).unwrap();
-        let message = compress(&message, None, true).unwrap();
+        //Lib doesn't document max compression value but hte linux man for the same underlying lib says 12 is max
+        let message = compress(&message, Some(CompressionMode::HIGHCOMPRESSION(12)), true).unwrap();
         server.broadcast_message_except(id, Channel::Reliable.id(), message);
     }
 }

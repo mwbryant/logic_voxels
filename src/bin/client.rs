@@ -1,8 +1,8 @@
 use std::{net::UdpSocket, time::SystemTime};
 
+use bevy::log::LogSettings;
 use logic_voxels::*;
 use lz4::block::decompress;
-use strum::IntoEnumIterator;
 
 #[derive(Component)]
 pub struct FollowCamera;
@@ -130,6 +130,10 @@ fn main() {
                 min_filter: FilterMode::Nearest,
                 ..Default::default()
             },
+        })
+        .insert_resource(LogSettings {
+            filter: "info,wgpu_core=warn,wgpu_hal=off,rechannel=warn".into(),
+            level: bevy::log::Level::DEBUG,
         })
         .insert_resource(WindowDescriptor {
             width: 1280.,

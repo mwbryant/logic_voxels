@@ -3,11 +3,9 @@ use std::{
     time::{Duration, SystemTime},
 };
 
-use bevy::log::LogPlugin;
+use bevy::log::{LogPlugin, LogSettings};
 use local_ip_address::local_ip;
 use logic_voxels::*;
-use strum::IntoEnumIterator;
-use strum_macros::EnumIter;
 
 fn create_renet_server() -> RenetServer {
     //TODO prompt for lan or external?
@@ -28,6 +26,10 @@ fn main() {
         // Cpu limiting (I wish I had a better way to make a headless bevy app low power but I can't find one)
         // Poor headless bevy
         .add_system(janky_cpu_limiting)
+        .insert_resource(LogSettings {
+            filter: "info,wgpu_core=warn,wgpu_hal=off,rechannel=warn".into(),
+            level: bevy::log::Level::DEBUG,
+        })
         .add_plugin(LogPlugin::default())
         .add_plugin(RenetServerPlugin)
         .insert_resource(create_renet_server())
@@ -43,7 +45,7 @@ fn main() {
 }
 
 fn janky_cpu_limiting() {
-    std::thread::sleep(Duration::from_millis(1));
+    std::thread::sleep(Duration::from_millis(5));
 }
 
 //Run before update

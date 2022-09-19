@@ -2,7 +2,7 @@ use std::sync::{Arc, RwLock};
 
 use bevy::{
     tasks::{AsyncComputeTaskPool, Task},
-    utils::HashMap,
+    utils::{FloatOrd, HashMap},
 };
 use futures_lite::future;
 use noise::{NoiseFn, Perlin};
@@ -322,9 +322,9 @@ pub fn server_create_chunks(
         let chunk_x = pos.x as f32 * CHUNK_SIZE as f32;
         let chunk_y = pos.y as f32 * CHUNK_SIZE as f32;
         let chunk_z = pos.z as f32 * CHUNK_SIZE as f32;
-        let mut chunk_data = gen_chunk(chunk_x, chunk_y, chunk_z);
-        chunk_data.pos = *pos;
         if server.can_send_message(*id, Channel::Block.id()) {
+            let mut chunk_data = gen_chunk(chunk_x, chunk_y, chunk_z);
+            chunk_data.pos = *pos;
             ServerBlockMessage::Chunk(chunk_data).send(&mut server, *id);
             info!("Sending Chunk! {}", *pos);
             return false;
@@ -337,10 +337,10 @@ pub fn server_create_chunks(
             let chunk_x = pos.x as f32 * CHUNK_SIZE as f32;
             let chunk_y = pos.y as f32 * CHUNK_SIZE as f32;
             let chunk_z = pos.z as f32 * CHUNK_SIZE as f32;
-            let mut chunk_data = gen_chunk(chunk_x, chunk_y, chunk_z);
-            chunk_data.pos = *pos;
             info!("Sending Chunk! {}", pos);
             if server.can_send_message(*id, Channel::Block.id()) {
+                let mut chunk_data = gen_chunk(chunk_x, chunk_y, chunk_z);
+                chunk_data.pos = *pos;
                 ServerBlockMessage::Chunk(chunk_data).send(&mut server, *id);
             } else {
                 error!("CANT SEND CHUNK");
@@ -355,14 +355,22 @@ pub fn initial_chunk_spawning(mut commands: Commands, mut client: ResMut<RenetCl
         if client.is_connected() {
             let chunks_to_spawn = (WORLD_SIZE / 2) as i32 + 1;
 
+            let mut request = Vec::default();
             for x in -chunks_to_spawn..chunks_to_spawn {
                 for y in -chunks_to_spawn..chunks_to_spawn {
                     for z in -chunks_to_spawn..chunks_to_spawn {
-                        info!("Requesting Chunk {:?}", IVec3::new(x, y, z));
-                        ClientMessage::RequestChunk(IVec3::new(x, y, z)).send(&mut client);
+                        request.push(IVec3::new(x, y, z));
                     }
                 }
             }
+
+            //TODO closest to player
+            request.sort_by_key(|pos| FloatOrd(Vec3::distance(Vec3::ZERO, pos.as_vec3())));
+
+            request.iter().for_each(|request| {
+                info!("Requesting Chunk {:?}", request);
+                ClientMessage::RequestChunk(*request).send(&mut client);
+            });
         } else {
             error!("Not connected to a server!");
         }
