@@ -11,6 +11,15 @@
             }
         },
         {
+            "label": "cargo run server",
+            "type": "shell",
+            "command": "~/.cargo/bin/cargo fmt && ~/.cargo/bin/cargo run --bin server", // note: full path to the cargo
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            }
+        },
+        {
             "label": "cargo run",
             "type": "shell",
             "command": "~/.cargo/bin/cargo fmt && ~/.cargo/bin/cargo run", // note: full path to the cargo

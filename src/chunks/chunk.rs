@@ -144,12 +144,13 @@ impl ChunkComp {
 type ChunkData = [[[Block; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE];
 
 //TODO serialize?
-#[derive(Clone)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Chunk {
     pub pos: IVec3,
     pub cubes: ChunkData,
     pub dirty: bool,
     //Cant be pub because then you could write them and cause weird deadlocks
+    #[serde(skip)]
     neighbors: [Weak<RwLock<Chunk>>; 6],
 }
 

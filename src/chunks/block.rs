@@ -1,6 +1,6 @@
 use crate::prelude::*;
 
-#[derive(Default, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Default, Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Block {
     #[default]
     Air,

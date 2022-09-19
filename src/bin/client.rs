@@ -1,23 +1,7 @@
-#![allow(clippy::too_many_arguments)]
+use std::{net::UdpSocket, time::SystemTime};
 
-use bevy::{
-    asset::AssetServerSettings,
-    pbr::wireframe::WireframePlugin,
-    render::{
-        render_resource::{AddressMode, FilterMode, SamplerDescriptor},
-        texture::ImageSettings,
-    },
-    window::PresentMode,
-};
-use bevy_flycam::{FlyCam, NoCameraPlayerPlugin};
-use bevy_inspector_egui::WorldInspectorPlugin;
-
-use crate::prelude::*;
-use material::{create_array_texture, CustomMaterial};
-
-mod chunks;
-mod material;
-mod prelude;
+use logic_voxels::*;
+use strum::IntoEnumIterator;
 
 #[derive(Component)]
 pub struct FollowCamera;
@@ -118,6 +102,22 @@ fn click_detection(
     }
 }
 
+fn create_renet_client() -> RenetClient {
+    //TODO Prompt for server IP
+    let server_addr = "192.168.0.16:5000".parse().unwrap();
+    let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
+    let connection_config = RenetConnectionConfig::default();
+    let current_time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap();
+    let client_id = current_time.as_millis() as u64;
+    let authentication = ClientAuthentication::Unsecure {
+        client_id,
+        protocol_id: PROTOCOL_ID,
+        server_addr,
+        user_data: None,
+    };
+    RenetClient::new(current_time, socket, client_id, connection_config, authentication).unwrap()
+}
+
 fn main() {
     App::new()
         .insert_resource(ImageSettings {
@@ -142,6 +142,16 @@ fn main() {
             watch_for_changes: true,
             ..default()
         })
+        .add_plugin(RenetClientPlugin)
+        .insert_resource(create_renet_client())
+        .init_resource::<Lobby>()
+        //XXX is this a bad way to do things...
+        .init_resource::<CurrentClientMessages>()
+        .init_resource::<CurrentClientBlockMessages>()
+        .add_stage_after(CoreStage::PreUpdate, ReadMessages, SystemStage::parallel())
+        .add_system_to_stage(ReadMessages, client_recieve_messages)
+        //.add_system(client_connection_system)
+        //
         .add_event::<ClickEvent>()
         .add_plugins(DefaultPlugins)
         .add_plugin(MaterialPlugin::<CustomMaterial>::default())
@@ -158,10 +168,43 @@ fn main() {
         .init_resource::<LoadedChunks>()
         .add_startup_system_to_stage(StartupStage::PreStartup, load_chunk_texture)
         .add_startup_system(initial_chunk_spawning)
+        .add_system(load_server_chunks)
+        .add_system(ping_test)
         .add_system(camera_follow)
         .add_system(update_dirt_sys)
         .add_system(update_dirty_chunks)
         .run();
+}
+
+//Run before update
+fn client_recieve_messages(
+    mut client: ResMut<RenetClient>,
+    mut messages: ResMut<CurrentClientMessages>,
+    mut block_messages: ResMut<CurrentClientBlockMessages>,
+) {
+    messages.clear();
+    block_messages.clear();
+    for channel in [Channel::Reliable, Channel::Unreliable] {
+        while let Some(message) = client.receive_message(channel.id()) {
+            let server_message = bincode::deserialize(&message).unwrap();
+            messages.push(server_message);
+        }
+    }
+    while let Some(message) = client.receive_message(Channel::Block.id()) {
+        let server_message = bincode::deserialize(&message).unwrap();
+        block_messages.push(server_message);
+    }
+}
+fn ping_test(mut client: ResMut<RenetClient>, keyboard: Res<Input<KeyCode>>, messages: Res<CurrentClientMessages>) {
+    if keyboard.just_pressed(KeyCode::P) {
+        info!("Sending ping!");
+        ClientMessage::Ping.send(&mut client);
+    }
+    for message in messages.iter() {
+        if matches!(message, ServerMessage::Pong) {
+            info!("Pong!");
+        }
+    }
 }
 
 fn camera_follow(
@@ -172,8 +215,6 @@ fn camera_follow(
         follower.translation = camera.single().translation;
     }
 }
-
-pub struct ChunkTexture(pub Handle<Image>);
 
 fn load_chunk_texture(mut commands: Commands, server: Res<AssetServer>) {
     commands.insert_resource(ChunkTexture(server.load("array_test.png")));
