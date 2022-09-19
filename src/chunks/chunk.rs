@@ -84,8 +84,10 @@ impl ChunkComp {
         self.chunk.write().unwrap().neighbors[dir] = neighbor.as_neighbor();
     }
 
+    //Times for updating dirt with 16 chunksize and 20 world size, all chunks updated (8000)
     //~16-18 ms to pre-read neighbors
     //~20-22 ms to read as you go
+    //There probably is a way to only do one loop here while also getting and holding the read lock but borrow checker angry
     #[allow(clippy::needless_range_loop)]
     pub fn apply_function_to_blocks<F>(&mut self, mut function: F)
     where
