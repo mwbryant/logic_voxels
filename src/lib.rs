@@ -15,8 +15,6 @@ pub use crate::prelude::*;
 pub use bevy_flycam::{FlyCam, NoCameraPlayerPlugin};
 pub use bevy_inspector_egui::WorldInspectorPlugin;
 pub use material::{create_array_texture, CustomMaterial};
-use strum::IntoEnumIterator;
-use strum_macros::EnumIter;
 
 pub struct ChunkTexture(pub Handle<Image>);
 pub use bevy::utils::HashMap;
@@ -72,7 +70,7 @@ pub enum ServerMessage {
 //Enum size is the max message size, so big messages need to be handled seperate
 #[derive(Serialize, Deserialize)]
 pub enum ServerBlockMessage {
-    Chunk(Chunk),
+    Chunk(CompressedChunk),
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -84,21 +82,17 @@ pub enum ClientMessage {
 impl ServerBlockMessage {
     pub fn send(&self, server: &mut RenetServer, id: u64) {
         let message = bincode::serialize(self).unwrap();
-        let message = compress(&message, None, true).unwrap();
         server.send_message(id, Channel::Block.id(), message);
     }
 
     pub fn broadcast(&self, server: &mut RenetServer) {
         let message = bincode::serialize(self).unwrap();
-        let message = compress(&message, None, true).unwrap();
-        server.broadcast_message(Channel::Reliable.id(), message);
+        server.broadcast_message(Channel::Block.id(), message);
     }
 
     pub fn broadcast_except(&self, server: &mut RenetServer, id: u64) {
         let message = bincode::serialize(self).unwrap();
-        //Lib doesn't document max compression value but hte linux man for the same underlying lib says 12 is max
-        let message = compress(&message, Some(CompressionMode::HIGHCOMPRESSION(12)), true).unwrap();
-        server.broadcast_message_except(id, Channel::Reliable.id(), message);
+        server.broadcast_message_except(id, Channel::Block.id(), message);
     }
 }
 

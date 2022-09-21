@@ -2,7 +2,6 @@ use std::{net::UdpSocket, time::SystemTime};
 
 use bevy::log::LogSettings;
 use logic_voxels::*;
-use lz4::block::decompress;
 
 #[derive(Component)]
 pub struct FollowCamera;
@@ -196,8 +195,6 @@ fn client_recieve_messages(
         }
     }
     while let Some(message) = client.receive_message(Channel::Block.id()) {
-        //FIXME this pairs with the compression in the send message, shouldn't be here
-        let message = decompress(&message, None).unwrap();
         let server_message = bincode::deserialize(&message).unwrap();
         block_messages.push(server_message);
     }

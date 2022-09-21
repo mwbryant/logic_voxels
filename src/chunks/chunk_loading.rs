@@ -1,4 +1,8 @@
-use std::sync::{Arc, RwLock};
+use std::{
+    fs,
+    path::Path,
+    sync::{Arc, RwLock},
+};
 
 use bevy::{
     tasks::{AsyncComputeTaskPool, Task},
@@ -17,39 +21,58 @@ pub struct LoadedChunks {
 }
 
 //World generation
-fn gen_chunk(chunk_x: f32, chunk_y: f32, chunk_z: f32) -> Chunk {
-    let mut chunk = Chunk::default();
-    let perlin = Perlin::new();
+//TODO kinda gross because the caller sets the actual chunk positions
+fn gen_chunk(chunk_x: i32, chunk_y: i32, chunk_z: i32) -> Chunk {
+    //Check if file, if not then write
+    //FIXME handle windows path encoding
+    let filename = format!("saves/chunk_{}_{}_{}.chunk", chunk_x, chunk_y, chunk_z);
+    let filename = Path::new(&filename);
 
-    for x in 0..CHUNK_SIZE {
-        for y in 0..CHUNK_SIZE {
-            for z in 0..CHUNK_SIZE {
-                let value = (perlin.get([
-                    (x as f64 + chunk_x as f64) / 21.912,
-                    (y as f64 + chunk_y as f64) / 29.312,
-                    (z as f64 + chunk_z as f64) / 23.253,
-                ]) + 1.0)
-                    / 2.0
-                    + (0.12
-                        * perlin.get([
-                            (x as f64 + chunk_x as f64) / 3.912,
-                            (y as f64 + chunk_y as f64) / 2.312,
-                            (z as f64 + chunk_z as f64) / 3.253,
-                        ])
-                        + 0.06);
-                //if value >= (y as f32 / CHUNK_SIZE as f32) as f64 || y == 0 {
-                if value >= 0.7 {
-                    chunk.cubes[x][y][z] = Block::Grass
+    if filename.exists() {
+        let chunk_bytes = fs::read(filename).unwrap();
+        Chunk::from_compressed(&chunk_bytes)
+    } else {
+        info!("Creating new chunk {:?}", filename);
+        let mut chunk = Chunk::default();
+        let perlin = Perlin::new();
+
+        for x in 0..CHUNK_SIZE {
+            for y in 0..CHUNK_SIZE {
+                for z in 0..CHUNK_SIZE {
+                    let chunk_x = chunk_x * CHUNK_SIZE as i32;
+                    let chunk_y = chunk_y * CHUNK_SIZE as i32;
+                    let chunk_z = chunk_z * CHUNK_SIZE as i32;
+                    let value = (perlin.get([
+                        (x as f64 + chunk_x as f64) / 21.912,
+                        (y as f64 + chunk_y as f64) / 29.312,
+                        (z as f64 + chunk_z as f64) / 23.253,
+                    ]) + 1.0)
+                        / 2.0
+                        + (0.12
+                            * perlin.get([
+                                (x as f64 + chunk_x as f64) / 3.912,
+                                (y as f64 + chunk_y as f64) / 2.312,
+                                (z as f64 + chunk_z as f64) / 3.253,
+                            ])
+                            + 0.06);
+                    //if value >= (y as f32 / CHUNK_SIZE as f32) as f64 || y == 0 {
+                    if value >= 0.5 {
+                        chunk.cubes[x][y][z] = Block::Grass
+                    }
                 }
             }
         }
+        //Write to file
+        fs::write(filename, chunk.compress()).unwrap();
+        chunk
     }
-    chunk
 }
 
 #[derive(Component)]
 pub struct CreateChunkTask(Task<(Chunk, Mesh)>);
 
+//Unused!
+/*
 pub fn server_send_chunks(
     mut commands: Commands,
     mut tasks: Query<(Entity, &mut CreateChunkTask)>,
@@ -59,7 +82,6 @@ pub fn server_send_chunks(
     mut meshes: ResMut<Assets<Mesh>>,
     texture: Res<ChunkTexture>,
     mut loaded_chunks: ResMut<LoadedChunks>,
-    mut server: ResMut<RenetServer>,
 ) {
     let mut spawned_this_frame = HashMap::default();
     let mut updates = 0;
@@ -171,6 +193,7 @@ pub fn server_send_chunks(
         commands.entity(ent).insert(comp);
     }
 }
+*/
 
 pub fn spawn_chunk_meshes(
     mut commands: Commands,
@@ -301,7 +324,7 @@ pub fn load_server_chunks(mut commands: Commands, messages: Res<CurrentClientBlo
     for message in messages.iter() {
         if let ServerBlockMessage::Chunk(chunk) = message {
             //Ugh but I guess this makes ownership happy;
-            let chunk_data = chunk.clone();
+            let chunk_data = Chunk::from_compressed(chunk);
             let thread_pool = AsyncComputeTaskPool::get();
             let task = thread_pool.spawn(async move {
                 let _span = info_span!("Chunk Generation Task", name = "Chunk Generation Task").entered();
@@ -313,19 +336,15 @@ pub fn load_server_chunks(mut commands: Commands, messages: Res<CurrentClientBlo
     }
 }
 pub fn server_create_chunks(
-    mut commands: Commands,
     messages: Res<CurrentServerMessages>,
     mut server: ResMut<RenetServer>,
     mut queued_requests: Local<Vec<(u64, IVec3)>>,
 ) {
     queued_requests.retain(|(id, pos)| {
-        let chunk_x = pos.x as f32 * CHUNK_SIZE as f32;
-        let chunk_y = pos.y as f32 * CHUNK_SIZE as f32;
-        let chunk_z = pos.z as f32 * CHUNK_SIZE as f32;
         if server.can_send_message(*id, Channel::Block.id()) {
-            let mut chunk_data = gen_chunk(chunk_x, chunk_y, chunk_z);
+            let mut chunk_data = gen_chunk(pos.x, pos.y, pos.z);
             chunk_data.pos = *pos;
-            ServerBlockMessage::Chunk(chunk_data).send(&mut server, *id);
+            ServerBlockMessage::Chunk(chunk_data.compress()).send(&mut server, *id);
             info!("Sending Chunk! {}", *pos);
             return false;
         }
@@ -334,14 +353,14 @@ pub fn server_create_chunks(
     for message in messages.iter() {
         //FIXME detect if I've already created this chunk
         if let (id, ClientMessage::RequestChunk(pos)) = message {
-            let chunk_x = pos.x as f32 * CHUNK_SIZE as f32;
-            let chunk_y = pos.y as f32 * CHUNK_SIZE as f32;
-            let chunk_z = pos.z as f32 * CHUNK_SIZE as f32;
+            //let chunk_x = pos.x as f32 * CHUNK_SIZE as f32;
+            //let chunk_y = pos.y as f32 * CHUNK_SIZE as f32;
+            //let chunk_z = pos.z as f32 * CHUNK_SIZE as f32;
             info!("Sending Chunk! {}", pos);
             if server.can_send_message(*id, Channel::Block.id()) {
-                let mut chunk_data = gen_chunk(chunk_x, chunk_y, chunk_z);
+                let mut chunk_data = gen_chunk(pos.x, pos.y, pos.z);
                 chunk_data.pos = *pos;
-                ServerBlockMessage::Chunk(chunk_data).send(&mut server, *id);
+                ServerBlockMessage::Chunk(chunk_data.compress()).send(&mut server, *id);
             } else {
                 error!("CANT SEND CHUNK");
                 queued_requests.push((*id, *pos));
@@ -350,7 +369,7 @@ pub fn server_create_chunks(
     }
 }
 
-pub fn initial_chunk_spawning(mut commands: Commands, mut client: ResMut<RenetClient>, input: Res<Input<KeyCode>>) {
+pub fn initial_chunk_spawning(mut client: ResMut<RenetClient>, input: Res<Input<KeyCode>>) {
     if input.just_pressed(KeyCode::L) {
         if client.is_connected() {
             let chunks_to_spawn = (WORLD_SIZE / 2) as i32 + 1;

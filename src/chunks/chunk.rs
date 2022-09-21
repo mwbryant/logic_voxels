@@ -1,5 +1,7 @@
 use std::sync::{Arc, RwLock, Weak};
 
+use lz4::block::decompress;
+
 use crate::prelude::*;
 
 #[derive(Component)]
@@ -142,6 +144,7 @@ impl ChunkComp {
 }
 
 type ChunkData = [[[Block; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE];
+pub type CompressedChunk = Vec<u8>;
 
 //TODO serialize?
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -173,6 +176,16 @@ impl Default for Chunk {
 }
 
 impl Chunk {
+    pub fn from_compressed(bytes: &CompressedChunk) -> Self {
+        let message = decompress(bytes, None).unwrap();
+        bincode::deserialize(&message).unwrap()
+    }
+
+    pub fn compress(&self) -> CompressedChunk {
+        let message = bincode::serialize(self).unwrap();
+        //Lib doesn't document max compression value but the linux man for the same underlying lib says 12 is max
+        compress(&message, Some(CompressionMode::HIGHCOMPRESSION(12)), true).unwrap()
+    }
     // Chunk pos and offset
     pub fn world_to_chunk(pos: IVec3) -> (IVec3, IVec3) {
         let size = CHUNK_SIZE as i32;
