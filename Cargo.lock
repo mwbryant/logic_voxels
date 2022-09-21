@@ -2271,6 +2271,7 @@ dependencies = [
  "noise",
  "rand 0.8.5",
  "rayon",
+ "renet_visualizer",
  "serde",
  "strum",
  "strum_macros",
@@ -3167,6 +3168,16 @@ dependencies = [
  "log",
  "rechannel",
  "renetcode",
+]
+
+[[package]]
+name = "renet_visualizer"
+version = "0.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "371df249e9cade11302df9f0a96f82f1033378aaa582781f0d786a1f0716f217"
+dependencies = [
+ "egui",
+ "renet",
 ]
 
 [[package]]

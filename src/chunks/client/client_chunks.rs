@@ -1,15 +1,10 @@
-use std::{
-    fs,
-    path::Path,
-    sync::{Arc, RwLock},
-};
+use std::sync::{Arc, RwLock};
 
 use bevy::{
     tasks::{AsyncComputeTaskPool, Task},
     utils::{FloatOrd, HashMap},
 };
 use futures_lite::future;
-use noise::{NoiseFn, Perlin};
 
 use crate::client::click_detection::*;
 //use crate::client::material::*;

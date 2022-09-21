@@ -5,12 +5,36 @@ use std::{
 };
 
 use crate::prelude::*;
-use bevy::{
-    tasks::{AsyncComputeTaskPool, Task},
-    utils::{FloatOrd, HashMap},
-};
-use futures_lite::future;
 use noise::{NoiseFn, Perlin};
+
+pub struct ServerChunkPlugin;
+impl Plugin for ServerChunkPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_system(server_create_chunks)
+            .add_system(break_blocks)
+            .init_resource::<LoadedChunks>();
+    }
+}
+
+fn break_blocks(
+    loaded_chunks: Res<LoadedChunks>,
+    comps: Query<&ChunkComp>,
+    messages: Res<CurrentServerMessages>,
+    mut server: ResMut<RenetServer>,
+) {
+    for (id, message) in messages.iter() {
+        if let ClientMessage::BreakBlock(pos) = message {
+            let (chunk_pos, offset) = Chunk::world_to_chunk(*pos);
+            if let Some(chunk) = loaded_chunks.ent_map.get(&chunk_pos) {
+                let chunk = comps.get(*chunk).unwrap();
+                chunk.write_block(offset, Block::Air);
+                ServerBlockMessage::Chunk(chunk.read_chunk().compress()).broadcast_except(&mut server, *id);
+            } else {
+                warn!("Chunk not loaded on server!");
+            }
+        }
+    }
+}
 
 //World generation
 //TODO kinda gross because the caller sets the actual chunk positions
@@ -61,20 +85,31 @@ fn gen_chunk(chunk_x: i32, chunk_y: i32, chunk_z: i32) -> Chunk {
 }
 
 //FIXME needs to wire up neighbors and stuff..
-fn server_load_chunk(commands: &mut Commands, loaded_chunks: &mut LoadedChunks, chunk: Chunk) {
-    let chunk_pos = chunk.pos;
-
-    let arc = Arc::new(RwLock::new(chunk));
-
+fn server_load_chunk(
+    commands: &mut Commands,
+    loaded_chunks: &mut LoadedChunks,
+    chunks: &Query<&ChunkComp>,
+    chunk_pos: IVec3,
+) -> CompressedChunk {
     //Check doesn't already exists!
-    if let Some(chunk) = loaded_chunks.ent_map.remove(&chunk_pos) {
-        error!("I already have this chunk loaded! {:?}", chunk_pos);
-        commands.entity(chunk).despawn_recursive();
-    }
+    match loaded_chunks.ent_map.get(&chunk_pos) {
+        Some(ent) => {
+            info!("I already have this chunk loaded! {:?}", chunk_pos);
+            chunks.get(*ent).unwrap().read_chunk().compress()
+        }
+        None => {
+            info!("Creating new chunk");
+            let mut chunk = gen_chunk(chunk_pos.x, chunk_pos.y, chunk_pos.z);
+            chunk.pos = chunk_pos;
+            let data = chunk.compress();
 
-    let comp = ChunkComp::new(arc);
-    let ent = commands.spawn().insert(comp).id();
-    loaded_chunks.ent_map.insert(chunk_pos, ent);
+            let arc = Arc::new(RwLock::new(chunk));
+            let comp = ChunkComp::new(arc);
+            let ent = commands.spawn().insert(comp).id();
+            loaded_chunks.ent_map.insert(chunk_pos, ent);
+            data
+        }
+    }
 }
 
 pub fn server_create_chunks(
@@ -82,15 +117,14 @@ pub fn server_create_chunks(
     messages: Res<CurrentServerMessages>,
     mut server: ResMut<RenetServer>,
     mut queued_requests: Local<Vec<(u64, IVec3)>>,
+    chunks: Query<&ChunkComp>,
     mut loaded_chunks: ResMut<LoadedChunks>,
 ) {
     queued_requests.retain(|(id, pos)| {
         if server.can_send_message(*id, Channel::Block.id()) {
-            let mut chunk_data = gen_chunk(pos.x, pos.y, pos.z);
-            chunk_data.pos = *pos;
-            ServerBlockMessage::Chunk(chunk_data.compress()).send(&mut server, *id);
             info!("Sending Chunk! {}", *pos);
-            server_load_chunk(&mut commands, &mut loaded_chunks, chunk_data);
+            let chunk_data = server_load_chunk(&mut commands, &mut loaded_chunks, &chunks, *pos);
+            ServerBlockMessage::Chunk(chunk_data).send(&mut server, *id);
             return false;
         }
         true
@@ -104,10 +138,8 @@ pub fn server_create_chunks(
             //let chunk_z = pos.z as f32 * CHUNK_SIZE as f32;
             if server.can_send_message(*id, Channel::Block.id()) {
                 info!("Sending Chunk! {}", pos);
-                let mut chunk_data = gen_chunk(pos.x, pos.y, pos.z);
-                chunk_data.pos = *pos;
-                ServerBlockMessage::Chunk(chunk_data.compress()).send(&mut server, *id);
-                server_load_chunk(&mut commands, &mut loaded_chunks, chunk_data);
+                let chunk_data = server_load_chunk(&mut commands, &mut loaded_chunks, &chunks, *pos);
+                ServerBlockMessage::Chunk(chunk_data).send(&mut server, *id);
             } else {
                 queued_requests.push((*id, *pos));
             }
