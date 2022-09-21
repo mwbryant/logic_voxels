@@ -10,8 +10,11 @@ use bevy::{
         },
     },
 };
+pub struct ChunkTexture(pub Handle<Image>);
 
-use crate::ChunkTexture;
+pub fn load_chunk_texture(mut commands: Commands, server: Res<AssetServer>) {
+    commands.insert_resource(ChunkTexture(server.load("array_test.png")));
+}
 
 pub fn create_array_texture(
     asset_server: Res<AssetServer>,

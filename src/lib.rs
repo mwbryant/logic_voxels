@@ -14,9 +14,7 @@ use lz4::block::{compress, CompressionMode};
 pub use crate::prelude::*;
 pub use bevy_flycam::{FlyCam, NoCameraPlayerPlugin};
 pub use bevy_inspector_egui::WorldInspectorPlugin;
-pub use material::{create_array_texture, CustomMaterial};
 
-pub struct ChunkTexture(pub Handle<Image>);
 pub use bevy::utils::HashMap;
 pub use bevy_renet::renet::*;
 pub use bevy_renet::*;
@@ -33,7 +31,6 @@ pub struct Lobby {
 pub const PROTOCOL_ID: u64 = 1000;
 
 mod chunks;
-mod material;
 mod prelude;
 
 #[derive(StageLabel)]

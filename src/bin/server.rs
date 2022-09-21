@@ -5,7 +5,7 @@ use std::{
 
 use bevy::log::{LogPlugin, LogSettings};
 use local_ip_address::local_ip;
-use logic_voxels::*;
+use logic_voxels::{server_chunks::server_create_chunks, *};
 
 fn create_renet_server() -> RenetServer {
     //TODO prompt for lan or external?
