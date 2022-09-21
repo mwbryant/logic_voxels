@@ -71,130 +71,6 @@ fn gen_chunk(chunk_x: i32, chunk_y: i32, chunk_z: i32) -> Chunk {
 #[derive(Component)]
 pub struct CreateChunkTask(Task<(Chunk, Mesh)>);
 
-//Unused!
-/*
-pub fn server_send_chunks(
-    mut commands: Commands,
-    mut tasks: Query<(Entity, &mut CreateChunkTask)>,
-    //How to fake mut here for interior mutability parallelism
-    chunks: Query<&ChunkComp>,
-    mut materials: ResMut<Assets<CustomMaterial>>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    texture: Res<ChunkTexture>,
-    mut loaded_chunks: ResMut<LoadedChunks>,
-) {
-    let mut spawned_this_frame = HashMap::default();
-    let mut updates = 0;
-    for (ent, mut task) in &mut tasks {
-        if let Some((chunk, mesh)) = future::block_on(future::poll_once(&mut task.0)) {
-            let chunk_pos = chunk.pos;
-            let pos = CHUNK_SIZE as i32 * chunk.pos;
-
-            let arc = Arc::new(RwLock::new(chunk));
-            loaded_chunks.ent_map.insert(chunk_pos, ent);
-            let arc = ChunkComp::new(arc);
-
-            fn connect_neighbor(
-                pos: IVec3,
-                dir: Direction,
-                loaded_chunks: &ResMut<LoadedChunks>,
-                chunks: &Query<&ChunkComp>,
-                comp: &ChunkComp,
-                spawned_this_frame: &HashMap<Entity, ChunkComp>,
-            ) {
-                if loaded_chunks.ent_map.contains_key(&pos) {
-                    //Set this chunks top neighbor
-                    //Set the top neighbors bottom to this chunk
-                    if let Ok(neighbor) = chunks.get(loaded_chunks.ent_map[&pos]) {
-                        comp.set_neighbor(dir, neighbor);
-                        neighbor.set_neighbor(dir.opposite(), comp);
-                    } else {
-                        //Spawned this frame
-                        let neighbor = &spawned_this_frame[&loaded_chunks.ent_map[&pos]];
-                        comp.set_neighbor(dir, neighbor);
-                        neighbor.set_neighbor(dir.opposite(), comp);
-                    }
-                }
-            }
-
-            connect_neighbor(
-                chunk_pos + IVec3::Y,
-                Direction::Top,
-                &loaded_chunks,
-                &chunks,
-                &arc,
-                &spawned_this_frame,
-            );
-            connect_neighbor(
-                chunk_pos - IVec3::Y,
-                Direction::Bottom,
-                &loaded_chunks,
-                &chunks,
-                &arc,
-                &spawned_this_frame,
-            );
-
-            connect_neighbor(
-                chunk_pos + IVec3::X,
-                Direction::Front,
-                &loaded_chunks,
-                &chunks,
-                &arc,
-                &spawned_this_frame,
-            );
-            connect_neighbor(
-                chunk_pos - IVec3::X,
-                Direction::Back,
-                &loaded_chunks,
-                &chunks,
-                &arc,
-                &spawned_this_frame,
-            );
-
-            connect_neighbor(
-                chunk_pos + IVec3::Z,
-                Direction::Left,
-                &loaded_chunks,
-                &chunks,
-                &arc,
-                &spawned_this_frame,
-            );
-            connect_neighbor(
-                chunk_pos - IVec3::Z,
-                Direction::Right,
-                &loaded_chunks,
-                &chunks,
-                &arc,
-                &spawned_this_frame,
-            );
-
-            //FIXME servers don't need mesh bundles
-            commands.entity(ent).insert_bundle(MaterialMeshBundle {
-                mesh: meshes.add(mesh),
-                //mesh: meshes.add(shape::Box::default().into()),
-                material: materials.add(CustomMaterial {
-                    textures: texture.0.clone(),
-                }),
-                transform: Transform::from_xyz(pos.x as f32, pos.y as f32, pos.z as f32),
-
-                ..default()
-            });
-            //.insert(Wireframe);
-            spawned_this_frame.insert(ent, arc);
-
-            commands.entity(ent).remove::<CreateChunkTask>();
-            updates += 1;
-            if updates > MAX_CHUNK_UPDATES_PER_FRAME {
-                break;
-            }
-        }
-    }
-    for (ent, comp) in spawned_this_frame.into_iter() {
-        commands.entity(ent).insert(comp);
-    }
-}
-*/
-
 pub fn spawn_chunk_meshes(
     mut commands: Commands,
     mut tasks: Query<(Entity, &mut CreateChunkTask)>,
@@ -335,10 +211,30 @@ pub fn load_server_chunks(mut commands: Commands, messages: Res<CurrentClientBlo
         }
     }
 }
+
+//FIXME needs to wire up neighbors and stuff..
+fn server_load_chunk(commands: &mut Commands, loaded_chunks: &mut LoadedChunks, chunk: Chunk) {
+    let chunk_pos = chunk.pos;
+
+    let arc = Arc::new(RwLock::new(chunk));
+
+    //Check doesn't already exists!
+    if let Some(chunk) = loaded_chunks.ent_map.remove(&chunk_pos) {
+        error!("I already have this chunk loaded! {:?}", chunk_pos);
+        commands.entity(chunk).despawn_recursive();
+    }
+
+    let comp = ChunkComp::new(arc);
+    let ent = commands.spawn().insert(comp).id();
+    loaded_chunks.ent_map.insert(chunk_pos, ent);
+}
+
 pub fn server_create_chunks(
+    mut commands: Commands,
     messages: Res<CurrentServerMessages>,
     mut server: ResMut<RenetServer>,
     mut queued_requests: Local<Vec<(u64, IVec3)>>,
+    mut loaded_chunks: ResMut<LoadedChunks>,
 ) {
     queued_requests.retain(|(id, pos)| {
         if server.can_send_message(*id, Channel::Block.id()) {
@@ -346,23 +242,25 @@ pub fn server_create_chunks(
             chunk_data.pos = *pos;
             ServerBlockMessage::Chunk(chunk_data.compress()).send(&mut server, *id);
             info!("Sending Chunk! {}", *pos);
+            server_load_chunk(&mut commands, &mut loaded_chunks, chunk_data);
             return false;
         }
         true
     });
+
     for message in messages.iter() {
         //FIXME detect if I've already created this chunk
         if let (id, ClientMessage::RequestChunk(pos)) = message {
             //let chunk_x = pos.x as f32 * CHUNK_SIZE as f32;
             //let chunk_y = pos.y as f32 * CHUNK_SIZE as f32;
             //let chunk_z = pos.z as f32 * CHUNK_SIZE as f32;
-            info!("Sending Chunk! {}", pos);
             if server.can_send_message(*id, Channel::Block.id()) {
+                info!("Sending Chunk! {}", pos);
                 let mut chunk_data = gen_chunk(pos.x, pos.y, pos.z);
                 chunk_data.pos = *pos;
                 ServerBlockMessage::Chunk(chunk_data.compress()).send(&mut server, *id);
+                server_load_chunk(&mut commands, &mut loaded_chunks, chunk_data);
             } else {
-                error!("CANT SEND CHUNK");
                 queued_requests.push((*id, *pos));
             }
         }

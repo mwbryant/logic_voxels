@@ -17,11 +17,13 @@ fn click_to_break(
     loaded_chunks: Res<LoadedChunks>,
     comps: Query<&ChunkComp>,
     mut click_reader: EventReader<ClickEvent>,
+    mut client: ResMut<RenetClient>,
 ) {
     for ev in click_reader.iter() {
         if ev.button == MouseButton::Left {
             let (chunk_pos, offset) = Chunk::world_to_chunk(ev.world_pos);
             if let Some(chunk) = loaded_chunks.ent_map.get(&chunk_pos) {
+                ClientMessage::BreakBlock(ev.world_pos).send(&mut client);
                 let chunk = comps.get(*chunk).unwrap();
                 chunk.write_block(offset, Block::Air);
             }
@@ -33,6 +35,7 @@ fn click_to_place(
     loaded_chunks: Res<LoadedChunks>,
     comps: Query<&ChunkComp>,
     mut click_reader: EventReader<ClickEvent>,
+    mut client: ResMut<RenetClient>,
 ) {
     for ev in click_reader.iter() {
         if ev.button == MouseButton::Right {
@@ -40,6 +43,7 @@ fn click_to_place(
             if let Some(chunk) = loaded_chunks.ent_map.get(&chunk_pos) {
                 let chunk = comps.get(*chunk).unwrap();
                 if chunk.read_block(offset) == Block::Air {
+                    ClientMessage::PlaceBlock(offset, Block::Red).send(&mut client);
                     chunk.write_block(offset, Block::Red);
                 }
             }

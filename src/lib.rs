@@ -76,6 +76,8 @@ pub enum ServerBlockMessage {
 #[derive(Debug, Serialize, Deserialize)]
 pub enum ClientMessage {
     Ping,
+    BreakBlock(IVec3),
+    PlaceBlock(IVec3, Block),
     RequestChunk(IVec3),
 }
 
@@ -123,7 +125,10 @@ impl ClientMessage {
     pub fn send(&self, client: &mut RenetClient) {
         let message = bincode::serialize(self).unwrap();
         match self {
-            ClientMessage::Ping | ClientMessage::RequestChunk(..) => {
+            ClientMessage::Ping
+            | ClientMessage::RequestChunk(..)
+            | ClientMessage::BreakBlock(..)
+            | ClientMessage::PlaceBlock(..) => {
                 if client.can_send_message(Channel::Reliable.id()) {
                     client.send_message(Channel::Reliable.id(), message)
                 } else {

@@ -40,6 +40,8 @@ fn main() {
         //FIXME fix this because its generating useless meshes on the server
         //.add_system(initial_chunk_spawning)
         .add_system(server_create_chunks)
+        .add_system(break_blocks)
+        .init_resource::<LoadedChunks>()
         .add_system(ping_test)
         .run();
 }
@@ -62,6 +64,45 @@ fn server_recieve_messages(mut server: ResMut<RenetServer>, mut messages: ResMut
     }
 }
 
+fn break_blocks(
+    loaded_chunks: Res<LoadedChunks>,
+    comps: Query<&ChunkComp>,
+    messages: Res<CurrentServerMessages>,
+    mut server: ResMut<RenetServer>,
+) {
+    for (id, message) in messages.iter() {
+        if let ClientMessage::BreakBlock(pos) = message {
+            let (chunk_pos, offset) = Chunk::world_to_chunk(*pos);
+            if let Some(chunk) = loaded_chunks.ent_map.get(&chunk_pos) {
+                let chunk = comps.get(*chunk).unwrap();
+                chunk.write_block(offset, Block::Air);
+                ServerBlockMessage::Chunk(chunk.read_chunk().compress()).broadcast_except(&mut server, *id);
+            } else {
+                warn!("Chunk not loaded on server!");
+            }
+        }
+    }
+}
+
+/*
+fn place_blocks(
+    loaded_chunks: Res<LoadedChunks>,
+    comps: Query<&ChunkComp>,
+) {
+    for ev in click_reader.iter() {
+        if ev.button == MouseButton::Right {
+            let (chunk_pos, offset) = Chunk::world_to_chunk(ev.prev_pos);
+            if let Some(chunk) = loaded_chunks.ent_map.get(&chunk_pos) {
+                let chunk = comps.get(*chunk).unwrap();
+                if chunk.read_block(offset) == Block::Air {
+                    ClientMessage::PlaceBlock(offset, Block::Red).send(&mut client);
+                    chunk.write_block(offset, Block::Red);
+                }
+            }
+        }
+    }
+}
+*/
 fn ping_test(messages: Res<CurrentServerMessages>, mut server: ResMut<RenetServer>) {
     for (id, message) in messages.iter() {
         if matches!(message, ClientMessage::Ping) {

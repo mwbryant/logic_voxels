@@ -23,6 +23,7 @@ impl ChunkComp {
         }
     }
     //These functions prevent deadlocks, in reality all that matters is writes finish so a pub read, private write would be nice
+    //TODO send to all clients if server write?
     pub fn write_block(&self, index: IVec3, block: Block) {
         //There's really no point in bounds checking this index, a logic error trying to write the wrong block should panic
         //Maybe one day there will be a use for a varient that returns a recoverable error
