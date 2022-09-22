@@ -60,10 +60,24 @@ fn main() {
 fn update_visulizer(
     mut egui_context: ResMut<EguiContext>,
     mut visualizer: ResMut<RenetServerVisualizer<200>>,
+    lobby: Res<Lobby>,
     server: Res<RenetServer>,
 ) {
     visualizer.update(&server);
-    visualizer.show_window(egui_context.ctx_mut());
+    bevy_inspector_egui::egui::TopBottomPanel::bottom("bottom_panel")
+        .min_height(200.)
+        .resizable(true)
+        .show(egui_context.ctx_mut(), |ui| {
+            bevy_inspector_egui::egui::ScrollArea::vertical().show(ui, |ui| {
+                ui.heading("Network Info");
+                for (id, _) in lobby.players.iter() {
+                    ui.label(format!("Client: {}", *id));
+                    ui.horizontal(|ui| {
+                        visualizer.draw_client_metrics(*id, ui);
+                    });
+                }
+            });
+        });
 }
 
 fn server_connection(
