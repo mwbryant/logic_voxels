@@ -1,15 +1,18 @@
-use std::{net::UdpSocket, time::SystemTime};
+use std::{
+    net::{SocketAddr, UdpSocket},
+    time::{Duration, SystemTime},
+};
 
 use bevy::{ecs::event::ManualEventReader, input::mouse::MouseMotion, log::LogSettings};
 use bevy_flycam::MovementSettings;
+use bevy_inspector_egui::{bevy_egui::EguiContext, egui};
 use logic_voxels::{client_chunks::ClientChunkPlugin, *};
 
 #[derive(Component)]
 pub struct FollowCamera;
 
-fn create_renet_client() -> RenetClient {
+fn create_renet_client(server_addr: SocketAddr) -> RenetClient {
     //TODO Prompt for server IP
-    let server_addr = "192.168.0.16:5000".parse().unwrap();
     let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
     let connection_config = RenetConnectionConfig::default();
     let current_time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap();
@@ -86,27 +89,63 @@ fn main() {
         .run();
 }
 
+pub struct ServerAddr(String);
+
+impl FromWorld for ServerAddr {
+    fn from_world(world: &mut World) -> Self {
+        ServerAddr("192.168.0.16".to_string())
+    }
+}
+
 fn client_connection_system(
     mut commands: Commands,
     keyboard: Res<Input<KeyCode>>,
     mut state: ResMut<State<ClientState>>,
+    mut egui_context: ResMut<EguiContext>,
+    mut addr: Local<ServerAddr>,
 ) {
-    if keyboard.just_pressed(KeyCode::Space) {
-        info!("Starting Connection!");
-        commands.insert_resource(create_renet_client());
-        let _ = state.set(ClientState::Connecting);
-    }
+    egui::Window::new("Connect to server").show(egui_context.ctx_mut(), |ui| {
+        ui.label("Address: ");
+        ui.add(egui::TextEdit::singleline(&mut addr.0));
+        if ui.button("Connect").clicked() || keyboard.just_pressed(KeyCode::Return) {
+            info!("Starting Connection!");
+            let server_addr = format!("{}:5000", addr.0).parse().unwrap();
+            commands.insert_resource(create_renet_client(server_addr));
+            let _ = state.set(ClientState::Connecting);
+        }
+    });
 }
 
-fn client_connection_ready(mut state: ResMut<State<ClientState>>, client: Res<RenetClient>) {
+fn client_connection_ready(
+    mut state: ResMut<State<ClientState>>,
+    client: Res<RenetClient>,
+    mut timeout_countdown: Local<Timer>,
+    mut egui_context: ResMut<EguiContext>,
+    time: Res<Time>,
+) {
+    //This is the default timeout time, could be cleaner and do a from world but eh
+    timeout_countdown.set_duration(Duration::from_secs_f32(15.));
+
     if client.is_connected() {
         info!("Connected!");
+        timeout_countdown.reset();
         let _ = state.set(ClientState::Gameplay);
     } else if let Some(reason) = client.disconnected() {
         error!("Failed to connect! {}", reason);
+        timeout_countdown.reset();
         let _ = state.set(ClientState::MainMenu);
     } else {
-        //info!("Waiting on connection!");
+        timeout_countdown.tick(time.delta());
+        egui::Window::new("Connect to server").show(egui_context.ctx_mut(), |ui| {
+            ui.label(format!(
+                "Connecting! Time until timeout: {:.1}",
+                timeout_countdown.duration().as_secs_f32() - timeout_countdown.elapsed_secs()
+            ));
+            if ui.button("Give Up").clicked() {
+                timeout_countdown.reset();
+                let _ = state.set(ClientState::MainMenu);
+            }
+        });
     }
 }
 //Yoinked from NoCameraPlayerPlugin to allow working with system sets
