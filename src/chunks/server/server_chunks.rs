@@ -37,7 +37,6 @@ fn break_blocks(
 }
 
 //World generation
-//TODO kinda gross because the caller sets the actual chunk positions
 fn gen_chunk(chunk_x: i32, chunk_y: i32, chunk_z: i32) -> Chunk {
     //Check if file, if not then write
     //FIXME handle windows path encoding
@@ -131,11 +130,7 @@ pub fn server_create_chunks(
     });
 
     for message in messages.iter() {
-        //FIXME detect if I've already created this chunk
         if let (id, ClientMessage::RequestChunk(pos)) = message {
-            //let chunk_x = pos.x as f32 * CHUNK_SIZE as f32;
-            //let chunk_y = pos.y as f32 * CHUNK_SIZE as f32;
-            //let chunk_z = pos.z as f32 * CHUNK_SIZE as f32;
             if server.can_send_message(*id, Channel::Block.id()) {
                 info!("Sending Chunk! {}", pos);
                 let chunk_data = server_load_chunk(&mut commands, &mut loaded_chunks, &chunks, *pos);

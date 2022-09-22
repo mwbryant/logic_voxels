@@ -2,6 +2,7 @@ pub use bevy::prelude::*;
 
 pub use crate::chunks::direction::Direction;
 pub use crate::chunks::*;
+pub use crate::networking::*;
 pub use crate::*;
 
 pub const CHUNK_SIZE: usize = 16;

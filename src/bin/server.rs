@@ -1,9 +1,9 @@
 use std::{
     net::{SocketAddr, UdpSocket},
-    time::{Duration, SystemTime},
+    time::SystemTime,
 };
 
-use bevy::log::{LogPlugin, LogSettings};
+use bevy::log::LogSettings;
 use bevy_inspector_egui::bevy_egui::EguiContext;
 use local_ip_address::local_ip;
 use logic_voxels::{server_chunks::ServerChunkPlugin, *};
@@ -91,7 +91,6 @@ fn server_connection(
             ServerEvent::ClientConnected(id, _) => {
                 visualizer.add_client(*id);
                 // Spawn new player
-                let transform = Transform::from_xyz(0.0, 0.51, 0.0);
                 let player_entity = commands.spawn().insert(Name::new(format!("Player {}", id))).id();
 
                 lobby.players.insert(*id, player_entity);
@@ -104,9 +103,6 @@ fn server_connection(
             }
         }
     }
-}
-fn janky_cpu_limiting() {
-    std::thread::sleep(Duration::from_millis(5));
 }
 
 //Run before update
