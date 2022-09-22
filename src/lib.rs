@@ -33,3 +33,10 @@ pub const PROTOCOL_ID: u64 = 1000;
 mod chunks;
 mod networking;
 mod prelude;
+
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
+pub enum ClientState {
+    MainMenu,
+    Connecting,
+    Gameplay,
+}

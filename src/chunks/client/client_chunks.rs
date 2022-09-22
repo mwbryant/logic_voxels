@@ -17,16 +17,17 @@ impl Plugin for ClientChunkPlugin {
         app.init_resource::<LoadedChunks>()
             .add_event::<ClickEvent>()
             .add_system(spawn_chunk_meshes)
-            .add_system(initial_chunk_spawning)
+            .add_system_set(SystemSet::on_enter(ClientState::Gameplay).with_system(initial_chunk_spawning))
             .add_system(load_chunks_from_server)
+            //TODO run on image loaded
             .add_system(create_array_texture)
             .add_system(update_dirt_sys)
             .add_system(update_dirty_chunks)
             .add_system_to_stage(CoreStage::PostUpdate, apply_buffered_chunk_writes)
             .add_startup_system_to_stage(StartupStage::PreStartup, client::material::load_chunk_texture)
-            .add_system(click_detection)
-            .add_system(click_to_break)
-            .add_system(click_to_place);
+            .add_system_set(SystemSet::on_update(ClientState::Gameplay).with_system(click_detection))
+            .add_system(click_to_break.with_run_criteria(run_if_client_connected))
+            .add_system(click_to_place.with_run_criteria(run_if_client_connected));
     }
 }
 
@@ -50,29 +51,28 @@ pub fn load_chunks_from_server(mut commands: Commands, messages: Res<CurrentClie
 }
 
 pub fn initial_chunk_spawning(mut client: ResMut<RenetClient>, input: Res<Input<KeyCode>>) {
-    if input.just_pressed(KeyCode::L) {
-        if client.is_connected() {
-            let chunks_to_spawn = (WORLD_SIZE / 2) as i32 + 1;
+    info!("Init Chunks");
+    if client.is_connected() {
+        let chunks_to_spawn = (WORLD_SIZE / 2) as i32 + 1;
 
-            let mut request = Vec::default();
-            for x in -chunks_to_spawn..chunks_to_spawn {
-                for y in -chunks_to_spawn..chunks_to_spawn {
-                    for z in -chunks_to_spawn..chunks_to_spawn {
-                        request.push(IVec3::new(x, y, z));
-                    }
+        let mut request = Vec::default();
+        for x in -chunks_to_spawn..chunks_to_spawn {
+            for y in -chunks_to_spawn..chunks_to_spawn {
+                for z in -chunks_to_spawn..chunks_to_spawn {
+                    request.push(IVec3::new(x, y, z));
                 }
             }
-
-            //TODO closest to player
-            request.sort_by_key(|pos| FloatOrd(Vec3::distance(Vec3::ZERO, pos.as_vec3())));
-
-            request.iter().for_each(|request| {
-                info!("Requesting Chunk {:?}", request);
-                ClientMessage::RequestChunk(*request).send(&mut client);
-            });
-        } else {
-            error!("Not connected to a server!");
         }
+
+        //TODO closest to player
+        request.sort_by_key(|pos| FloatOrd(Vec3::distance(Vec3::ZERO, pos.as_vec3())));
+
+        request.iter().for_each(|request| {
+            info!("Requesting Chunk {:?}", request);
+            ClientMessage::RequestChunk(*request).send(&mut client);
+        });
+    } else {
+        error!("Not connected to a server!");
     }
 }
 
