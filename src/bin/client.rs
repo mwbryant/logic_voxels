@@ -92,7 +92,7 @@ fn main() {
 pub struct ServerAddr(String);
 
 impl FromWorld for ServerAddr {
-    fn from_world(world: &mut World) -> Self {
+    fn from_world(_world: &mut World) -> Self {
         ServerAddr("192.168.0.16".to_string())
     }
 }

@@ -6,7 +6,7 @@ pub use crate::networking::*;
 pub use crate::*;
 
 pub const CHUNK_SIZE: usize = 16;
-pub const WORLD_SIZE: usize = 1;
+pub const WORLD_SIZE: usize = 5;
 pub const MAX_CHUNK_UPDATES_PER_FRAME: usize = 30;
 
 //XXX maybe a memory leak because unloaded chunks are never removed

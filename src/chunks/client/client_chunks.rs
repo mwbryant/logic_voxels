@@ -7,7 +7,6 @@ use bevy::{
 use futures_lite::future;
 
 use crate::client::click_detection::*;
-//use crate::client::material::*;
 use crate::prelude::*;
 
 pub struct ClientChunkPlugin;
@@ -17,10 +16,14 @@ impl Plugin for ClientChunkPlugin {
         app.init_resource::<LoadedChunks>()
             .add_event::<ClickEvent>()
             .add_system(spawn_chunk_meshes)
-            .add_system_set(SystemSet::on_enter(ClientState::Gameplay).with_system(initial_chunk_spawning))
+            .add_system_set(
+                SystemSet::on_enter(ClientState::Gameplay)
+                    .with_system(initial_chunk_requests)
+                    .with_system(create_array_texture),
+            )
             .add_system(load_chunks_from_server)
             //TODO run on image loaded
-            .add_system(create_array_texture)
+            //.add_system(create_array_texture)
             .add_system(update_dirt_sys)
             .add_system(update_dirty_chunks)
             .add_system_to_stage(CoreStage::PostUpdate, apply_buffered_chunk_writes)
@@ -50,7 +53,7 @@ pub fn load_chunks_from_server(mut commands: Commands, messages: Res<CurrentClie
     }
 }
 
-pub fn initial_chunk_spawning(mut client: ResMut<RenetClient>, input: Res<Input<KeyCode>>) {
+pub fn initial_chunk_requests(mut client: ResMut<RenetClient>) {
     info!("Init Chunks");
     if client.is_connected() {
         let chunks_to_spawn = (WORLD_SIZE / 2) as i32 + 1;
@@ -96,7 +99,6 @@ pub fn spawn_chunk_meshes(
             let arc = Arc::new(RwLock::new(chunk));
             //Check doesn't already exists!
             if let Some(chunk) = loaded_chunks.ent_map.remove(&chunk_pos) {
-                error!("I already have this chunk loaded! {:?}", chunk_pos);
                 commands.entity(chunk).despawn_recursive();
             }
             loaded_chunks.ent_map.insert(chunk_pos, ent);
@@ -116,11 +118,14 @@ pub fn spawn_chunk_meshes(
                     if let Ok(neighbor) = chunks.get(loaded_chunks.ent_map[&pos]) {
                         comp.set_neighbor(dir, neighbor);
                         neighbor.set_neighbor(dir.opposite(), comp);
+                        //Dirty neighbors because I have changed
+                        neighbor.write_dirty(true);
                     } else {
                         //Spawned this frame
                         let neighbor = &spawned_this_frame[&loaded_chunks.ent_map[&pos]];
                         comp.set_neighbor(dir, neighbor);
                         neighbor.set_neighbor(dir.opposite(), comp);
+                        neighbor.write_dirty(true);
                     }
                 }
             }

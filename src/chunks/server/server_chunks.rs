@@ -5,18 +5,46 @@ use std::{
 };
 
 use crate::prelude::*;
+use bevy::{app::AppExit, window::exit_on_all_closed};
+use bevy_inspector_egui::{bevy_egui::EguiContext, egui};
 use noise::{NoiseFn, Perlin};
 
 pub struct ServerChunkPlugin;
 impl Plugin for ServerChunkPlugin {
     fn build(&self, app: &mut App) {
         app.add_system(server_create_chunks)
-            .add_system(break_blocks)
+            .add_system(server_break_blocks)
+            .add_system(server_place_blocks)
+            .add_system(server_save_and_quit)
             .init_resource::<LoadedChunks>();
     }
 }
 
-fn break_blocks(
+fn server_save_and_quit(
+    mut egui_context: ResMut<EguiContext>,
+    loaded_chunks: Res<LoadedChunks>,
+    comps: Query<&ChunkComp>,
+    keyboard: Res<Input<KeyCode>>,
+    mut exit: EventWriter<AppExit>,
+    mut server: ResMut<RenetServer>,
+) {
+    egui::Window::new("Quit Server").show(egui_context.ctx_mut(), |ui| {
+        if ui.button("Quit and Save").clicked() || keyboard.just_pressed(KeyCode::Escape) {
+            for (pos, chunk) in loaded_chunks.ent_map.iter() {
+                let chunk = comps.get(*chunk).unwrap();
+                //Copied from elsewhere! Duplicated code
+                let filename = format!("saves/chunk_{}_{}_{}.chunk", pos.x, pos.y, pos.z);
+                let filename = Path::new(&filename);
+                fs::write(filename, chunk.read_chunk().compress()).unwrap();
+            }
+            //XXX does this actually reach all clients?
+            server.disconnect_clients();
+            exit.send(AppExit);
+        }
+    });
+}
+
+fn server_break_blocks(
     loaded_chunks: Res<LoadedChunks>,
     comps: Query<&ChunkComp>,
     messages: Res<CurrentServerMessages>,
@@ -28,6 +56,26 @@ fn break_blocks(
             if let Some(chunk) = loaded_chunks.ent_map.get(&chunk_pos) {
                 let chunk = comps.get(*chunk).unwrap();
                 chunk.write_block(offset, Block::Air);
+                ServerBlockMessage::Chunk(chunk.read_chunk().compress()).broadcast_except(&mut server, *id);
+            } else {
+                warn!("Chunk not loaded on server!");
+            }
+        }
+    }
+}
+
+fn server_place_blocks(
+    loaded_chunks: Res<LoadedChunks>,
+    comps: Query<&ChunkComp>,
+    messages: Res<CurrentServerMessages>,
+    mut server: ResMut<RenetServer>,
+) {
+    for (id, message) in messages.iter() {
+        if let ClientMessage::PlaceBlock(pos, block) = message {
+            let (chunk_pos, offset) = Chunk::world_to_chunk(*pos);
+            if let Some(chunk) = loaded_chunks.ent_map.get(&chunk_pos) {
+                let chunk = comps.get(*chunk).unwrap();
+                chunk.write_block(offset, *block);
                 ServerBlockMessage::Chunk(chunk.read_chunk().compress()).broadcast_except(&mut server, *id);
             } else {
                 warn!("Chunk not loaded on server!");
