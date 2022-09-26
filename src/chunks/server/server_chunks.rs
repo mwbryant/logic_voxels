@@ -5,7 +5,7 @@ use std::{
 };
 
 use crate::prelude::*;
-use bevy::{app::AppExit, window::exit_on_all_closed};
+use bevy::app::AppExit;
 use bevy_inspector_egui::{bevy_egui::EguiContext, egui};
 use noise::{NoiseFn, Perlin};
 

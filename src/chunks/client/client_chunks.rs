@@ -40,7 +40,6 @@ pub struct CreateChunkTask(Task<(Chunk, Mesh)>);
 pub fn load_chunks_from_server(mut commands: Commands, messages: Res<CurrentClientBlockMessages>) {
     for message in messages.iter() {
         if let ServerBlockMessage::Chunk(chunk) = message {
-            //Ugh but I guess this makes ownership happy;
             let chunk_data = Chunk::from_compressed(chunk);
             let thread_pool = AsyncComputeTaskPool::get();
             let task = thread_pool.spawn(async move {
