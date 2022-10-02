@@ -35,6 +35,7 @@ impl Channel {
         }
     }
 }
+
 #[derive(Debug, Default, Deref, DerefMut)]
 pub struct CurrentServerMessages(Vec<(u64, ClientMessage)>);
 

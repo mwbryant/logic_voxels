@@ -187,8 +187,24 @@ impl Chunk {
         //Lib doesn't document max compression value but the linux man for the same underlying lib says 12 is max
         compress(&message, Some(CompressionMode::HIGHCOMPRESSION(12)), true).unwrap()
     }
+
+    //FIXME this is so janky
+    pub fn world_to_chunk(pos: Vec3) -> (IVec3, IVec3) {
+        let mut i_pos = pos.as_ivec3();
+        if pos.x < 0. {
+            i_pos.x -= 1;
+        }
+        if pos.y < 0. {
+            i_pos.y -= 1;
+        }
+        if pos.z < 0. {
+            i_pos.z -= 1;
+        }
+        Chunk::i_world_to_chunk(i_pos)
+    }
+
     // Chunk pos and offset
-    pub fn world_to_chunk(pos: IVec3) -> (IVec3, IVec3) {
+    pub fn i_world_to_chunk(pos: IVec3) -> (IVec3, IVec3) {
         let size = CHUNK_SIZE as i32;
         let offset = IVec3::new(pos.x.rem_euclid(size), pos.y.rem_euclid(size), pos.z.rem_euclid(size));
         let x = if pos.x >= 0 {

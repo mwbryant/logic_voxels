@@ -67,13 +67,13 @@ fn main() {
             client_recieve_messages.with_run_criteria(run_if_client_connected),
         )
         .add_system_set(SystemSet::on_update(ClientState::MainMenu).with_system(client_connection_system))
+        .add_system_set(SystemSet::on_update(ClientState::Connecting).with_system(client_connection_ready))
         .add_plugin(ClientChunkPlugin)
         .add_plugin(PhysicsPlugin)
         .add_plugins(DefaultPlugins)
         .add_plugin(MaterialPlugin::<CustomMaterial>::default())
         .add_plugin(WorldInspectorPlugin::default())
         .add_plugin(WireframePlugin)
-        .add_system_set(SystemSet::on_update(ClientState::Connecting).with_system(client_connection_ready))
         .add_startup_system(spawn_camera)
         .add_system_set(SystemSet::on_update(ClientState::Gameplay).with_system(ping_test))
         .add_system(camera_follow)
@@ -207,10 +207,10 @@ fn spawn_camera(mut commands: Commands) {
 
     commands
         .spawn_bundle(Camera3dBundle {
-            transform: Transform::from_xyz(-3.0, 15.5, -1.0).looking_at(Vec3::new(100.0, 0.0, 100.0), Vec3::Y),
+            transform: Transform::from_xyz(-0.0, 0.0, -0.0).looking_at(Vec3::new(100.0, 0.0, 100.0), Vec3::Y),
             ..default()
         })
         .insert_bundle(VisibilityBundle::default())
-        .insert(PhysicsObject::default())
+        //.insert(PhysicsObject::default())
         .insert(FlyCam);
 }

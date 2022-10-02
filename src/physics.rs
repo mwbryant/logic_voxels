@@ -12,10 +12,19 @@ pub struct PhysicsObject {
     pub mass: Kilograms,
 }
 
+#[derive(Component)]
+pub struct PhysicsCube {
+    pub length: Meters,
+}
+
+#[derive(Deref, DerefMut)]
 pub struct Kilograms(f32);
 //Find a better way
 // Use dim analysis 7 dim vector?
+#[derive(Deref, DerefMut)]
 pub struct MetersPerSecond2(f32);
+#[derive(Deref, DerefMut)]
+pub struct Meters(f32);
 
 impl Default for PhysicsObject {
     fn default() -> Self {
@@ -36,10 +45,12 @@ impl Plugin for PhysicsPlugin {
             //.add_plugin(NoCameraPlayerPlugin)
             .init_resource::<InputState>()
             .init_resource::<MovementSettings>()
-            .insert_resource(Gravity(MetersPerSecond2(-9.8)))
+            .insert_resource(Gravity(MetersPerSecond2(-1.0)))
             .insert_resource(TerminalVelocity(100.0))
             .add_system_to_stage(CoreStage::PostUpdate, apply_physics_velocity)
             .add_system(apply_physics_gravity)
+            .add_system(voxel_cube_collision.after(apply_physics_gravity))
+            .add_system_set(SystemSet::on_enter(ClientState::Gameplay).with_system(test_physics))
             .add_system_set(
                 SystemSet::on_update(ClientState::Gameplay)
                     .with_system(player_move)
@@ -48,10 +59,94 @@ impl Plugin for PhysicsPlugin {
             );
     }
 }
+
+fn test_physics(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>, mut mats: ResMut<Assets<StandardMaterial>>) {
+    commands
+        .spawn_bundle(PbrBundle {
+            mesh: meshes.add(shape::Cube::default().into()),
+            material: mats.add(Color::RED.into()),
+            ..default()
+        })
+        .insert(PhysicsCube { length: Meters(1.0) })
+        .insert(PhysicsObject::default());
+}
+
+pub struct Aabb {
+    min: Vec3,
+    max: Vec3,
+}
+
+impl Aabb {
+    pub fn corners(&self) -> Vec<Vec3> {
+        vec![
+            Vec3::new(self.min.x, self.min.y, self.min.z),
+            Vec3::new(self.max.x, self.min.y, self.min.z),
+            Vec3::new(self.min.x, self.max.y, self.min.z),
+            Vec3::new(self.max.x, self.max.y, self.min.z),
+            Vec3::new(self.min.x, self.min.y, self.max.z),
+            Vec3::new(self.max.x, self.min.y, self.max.z),
+            Vec3::new(self.min.x, self.max.y, self.max.z),
+            Vec3::new(self.max.x, self.max.y, self.max.z),
+        ]
+    }
+}
+
+fn voxel_cube_collision(
+    mut physics: Query<(
+        &Transform,
+        &mut PhysicsObject,
+        &mut Handle<StandardMaterial>,
+        &PhysicsCube,
+    )>,
+    chunks: Res<LoadedChunks>,
+    chunk_comps: Query<&ChunkComp>,
+    mut mats: ResMut<Assets<StandardMaterial>>,
+    time: Res<Time>,
+) {
+    for (transform, mut physics, mut material, cube) in &mut physics {
+        //Ugh I hate physics
+        //Bigger cubes need to check more than just their 8 corners
+        assert!(cube.length.0 <= 1.0);
+        let next_position = try_physics_velocity(transform, &physics, &time);
+        let y_min = next_position.y - cube.length.0 / 2.0;
+        let y_max = next_position.y + cube.length.0 / 2.0;
+        let x_min = next_position.x - cube.length.0 / 2.0;
+        let x_max = next_position.x + cube.length.0 / 2.0;
+        let z_min = next_position.z - cube.length.0 / 2.0;
+        let z_max = next_position.z + cube.length.0 / 2.0;
+        // https://developer.mozilla.org/en-US/docs/Games/Techniques/3D_collision_detection
+        let aabb = Aabb {
+            min: Vec3::new(x_min, y_min, z_min),
+            max: Vec3::new(x_max, y_max, z_max),
+        };
+
+        for corner in aabb.corners() {
+            if check_point_collision(corner, &chunks, &chunk_comps) {
+                physics.velocity = Vec3::ZERO;
+            }
+        }
+    }
+}
+
+fn check_point_collision(point: Vec3, chunks: &LoadedChunks, chunk_comps: &Query<&ChunkComp>) -> bool {
+    let (chunk_pos, offset) = Chunk::world_to_chunk(point);
+    if let Some(chunk_ent) = chunks.ent_map.get(&chunk_pos) {
+        if let Ok(chunk_comp) = chunk_comps.get(*chunk_ent) {
+            if chunk_comp.read_block(offset) != Block::Air {
+                return true;
+            }
+        }
+    }
+    false
+}
+
 fn apply_physics_gravity(mut physics: Query<&mut PhysicsObject>, gravity: Res<Gravity>, time: Res<Time>) {
     for mut physics in &mut physics {
         physics.velocity.y += gravity.0 .0 * time.delta_seconds();
     }
+}
+fn try_physics_velocity(transform: &Transform, physics: &PhysicsObject, time: &Time) -> Vec3 {
+    transform.translation + physics.velocity * time.delta_seconds()
 }
 
 fn apply_physics_velocity(
@@ -63,7 +158,7 @@ fn apply_physics_velocity(
         if physics.velocity.length() > terminal_velocity.0 {
             physics.velocity = physics.velocity.normalize() * terminal_velocity.0;
         }
-        transform.translation += physics.velocity * time.delta_seconds();
+        transform.translation = try_physics_velocity(&transform, &physics, &time);
     }
 }
 

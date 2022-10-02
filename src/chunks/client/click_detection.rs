@@ -15,7 +15,7 @@ pub(crate) fn click_to_break(
 ) {
     for ev in click_reader.iter() {
         if ev.button == MouseButton::Left {
-            let (chunk_pos, offset) = Chunk::world_to_chunk(ev.world_pos);
+            let (chunk_pos, offset) = Chunk::i_world_to_chunk(ev.world_pos);
             if let Some(chunk) = loaded_chunks.ent_map.get(&chunk_pos) {
                 ClientMessage::BreakBlock(ev.world_pos).send(&mut client);
                 let chunk = comps.get(*chunk).unwrap();
@@ -33,7 +33,7 @@ pub(crate) fn click_to_place(
 ) {
     for ev in click_reader.iter() {
         if ev.button == MouseButton::Right {
-            let (chunk_pos, offset) = Chunk::world_to_chunk(ev.prev_pos);
+            let (chunk_pos, offset) = Chunk::i_world_to_chunk(ev.prev_pos);
             if let Some(chunk) = loaded_chunks.ent_map.get(&chunk_pos) {
                 let chunk = comps.get(*chunk).unwrap();
                 if chunk.read_block(offset) == Block::Air {
@@ -67,7 +67,7 @@ pub(crate) fn click_detection(
         for _i in 0..(steps as usize) {
             let block_pos = current - Vec3::ONE / 2.0;
             let world_pos = block_pos.round().as_ivec3();
-            let (chunk_pos, offset) = Chunk::world_to_chunk(world_pos);
+            let (chunk_pos, offset) = Chunk::i_world_to_chunk(world_pos);
 
             if let Some(chunk) = loaded_chunks.ent_map.get(&chunk_pos) {
                 let chunk = comps.get(*chunk).unwrap();

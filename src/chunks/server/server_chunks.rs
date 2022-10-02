@@ -52,7 +52,7 @@ fn server_break_blocks(
 ) {
     for (id, message) in messages.iter() {
         if let ClientMessage::BreakBlock(pos) = message {
-            let (chunk_pos, offset) = Chunk::world_to_chunk(*pos);
+            let (chunk_pos, offset) = Chunk::i_world_to_chunk(*pos);
             if let Some(chunk) = loaded_chunks.ent_map.get(&chunk_pos) {
                 let chunk = comps.get(*chunk).unwrap();
                 chunk.write_block(offset, Block::Air);
@@ -72,7 +72,7 @@ fn server_place_blocks(
 ) {
     for (id, message) in messages.iter() {
         if let ClientMessage::PlaceBlock(pos, block) = message {
-            let (chunk_pos, offset) = Chunk::world_to_chunk(*pos);
+            let (chunk_pos, offset) = Chunk::i_world_to_chunk(*pos);
             if let Some(chunk) = loaded_chunks.ent_map.get(&chunk_pos) {
                 let chunk = comps.get(*chunk).unwrap();
                 chunk.write_block(offset, *block);
