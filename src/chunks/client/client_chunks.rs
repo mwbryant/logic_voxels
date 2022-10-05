@@ -1,6 +1,7 @@
 use std::sync::{Arc, RwLock};
 
 use bevy::{
+    pbr::wireframe::Wireframe,
     tasks::{AsyncComputeTaskPool, Task},
     utils::{FloatOrd, HashMap},
 };
@@ -180,21 +181,19 @@ pub fn spawn_chunk_meshes(
                 &arc,
                 &spawned_this_frame,
             );
-            commands
-                .entity(ent)
-                .insert_bundle(MaterialMeshBundle {
-                    mesh: meshes.add(mesh),
-                    //mesh: meshes.add(shape::Box::default().into()),
-                    material: materials.add(CustomMaterial {
-                        textures: texture.0.clone(),
-                    }),
-                    transform: Transform::from_xyz(pos.x as f32, pos.y as f32, pos.z as f32),
+            commands.entity(ent).insert_bundle(MaterialMeshBundle {
+                mesh: meshes.add(mesh),
+                //mesh: meshes.add(shape::Box::default().into()),
+                material: materials.add(CustomMaterial {
+                    textures: texture.0.clone(),
+                }),
+                transform: Transform::from_xyz(pos.x as f32, pos.y as f32, pos.z as f32),
 
-                    ..default()
-                })
-                .insert(RigidBody::Fixed)
-                .insert(create_collider(mesh_data));
-            //.insert(Wireframe);
+                ..default()
+            });
+            if let Some(collider) = create_collider(mesh_data) {
+                commands.entity(ent).insert(collider);
+            }
             spawned_this_frame.insert(ent, arc);
 
             commands.entity(ent).remove::<CreateChunkTask>();
@@ -209,7 +208,8 @@ pub fn spawn_chunk_meshes(
     }
 }
 
-pub fn create_collider(desc: MeshDescription) -> Collider {
+//FIXME move to physics
+pub fn create_collider(desc: MeshDescription) -> Option<Collider> {
     let tri_count = desc.vert_indicies.len() / 3;
     let mut indices = Vec::with_capacity(tri_count);
     //TODO this can be done in a seperate function and probably in a better way
@@ -220,5 +220,9 @@ pub fn create_collider(desc: MeshDescription) -> Collider {
             desc.vert_indicies[index * 3 + 2] as u32,
         ]);
     }
-    Collider::trimesh(desc.verts, indices)
+    if tri_count > 0 {
+        Some(Collider::trimesh(desc.verts, indices))
+    } else {
+        None
+    }
 }

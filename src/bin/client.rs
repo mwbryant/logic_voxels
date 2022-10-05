@@ -78,6 +78,7 @@ fn main() {
         .add_plugin(ClientChunkPlugin)
         .add_plugin(PhysicsPlugin)
         .add_plugins(DefaultPlugins)
+        //TODO move
         .add_plugin(MaterialPlugin::<CustomMaterial>::default())
         .add_plugin(WorldInspectorPlugin::default())
         .add_plugin(WireframePlugin)

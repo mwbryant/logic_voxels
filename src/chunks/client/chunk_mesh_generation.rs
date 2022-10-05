@@ -11,6 +11,7 @@ use bevy::render::{
 #[derive(Default, Clone)]
 pub struct MeshDescription {
     pub verts: Vec<Vec3>,
+    true_normals: Vec<Vec3>,
     normals: Vec<[u8; 2]>,
     uvs: Vec<[u8; 2]>,
     texture_indices: Vec<u32>,
@@ -39,9 +40,9 @@ pub fn create_chunk_mesh(chunk: &Chunk) -> (Mesh, MeshDescription) {
     mesh.insert_attribute(
         Mesh::ATTRIBUTE_NORMAL,
         description
-            .verts
+            .true_normals
             .iter()
-            .map(|vec| vec.to_array())
+            .map(|normal| normal.to_array())
             .collect::<Vec<[f32; 3]>>(),
     );
 
@@ -266,9 +267,48 @@ fn create_greedy_face(
         Vec3::new(0.0, 1.0, 0.0),
     ];
 
-    let rotation = dir.get_face_rotation();
-    //FIXME normals aren't right maybe?
-    new_normals.iter_mut().for_each(|vec| *vec = rotation * *vec);
+    let new_normals = match dir {
+        Direction::Front => [
+            Vec3::new(1.0, 0.0, 0.0),
+            Vec3::new(1.0, 0.0, 0.0),
+            Vec3::new(1.0, 0.0, 0.0),
+            Vec3::new(1.0, 0.0, 0.0),
+        ],
+        Direction::Back => [
+            Vec3::new(-1.0, 0.0, 0.0),
+            Vec3::new(-1.0, 0.0, 0.0),
+            Vec3::new(-1.0, 0.0, 0.0),
+            Vec3::new(-1.0, 0.0, 0.0),
+        ],
+        Direction::Left => [
+            Vec3::new(0.0, 0.0, 1.0),
+            Vec3::new(0.0, 0.0, 1.0),
+            Vec3::new(0.0, 0.0, 1.0),
+            Vec3::new(0.0, 0.0, 1.0),
+        ],
+        Direction::Right => [
+            Vec3::new(0.0, 0.0, -1.0),
+            Vec3::new(0.0, 0.0, -1.0),
+            Vec3::new(0.0, 0.0, -1.0),
+            Vec3::new(0.0, 0.0, -1.0),
+        ],
+        Direction::Top => [
+            Vec3::new(0.0, 1.0, 0.0),
+            Vec3::new(0.0, 1.0, 0.0),
+            Vec3::new(0.0, 1.0, 0.0),
+            Vec3::new(0.0, 1.0, 0.0),
+        ],
+        Direction::Bottom => [
+            Vec3::new(0.0, -1.0, 0.0),
+            Vec3::new(0.0, -1.0, 0.0),
+            Vec3::new(0.0, -1.0, 0.0),
+            Vec3::new(0.0, -1.0, 0.0),
+        ],
+    };
+
+    //let rotation = dir.get_face_rotation();
+    ////FIXME normals aren't right maybe?
+    //new_normals.iter_mut().for_each(|vec| *vec = rotation * *vec);
 
     let normals = new_normals
         .iter()
@@ -294,6 +334,8 @@ fn create_greedy_face(
     let vert_start = mesh_description.verts.len();
     mesh_description.verts.extend_from_slice(&new_verts);
     mesh_description.normals.extend_from_slice(&normals);
+    //info!("{:?}", new_normals);
+    mesh_description.true_normals.extend_from_slice(&new_normals);
     mesh_description.uvs.extend_from_slice(&new_uvs);
 
     mesh_description.texture_indices.extend_from_slice(&new_texture_indices);

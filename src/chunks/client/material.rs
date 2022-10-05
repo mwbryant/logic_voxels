@@ -6,7 +6,8 @@ use bevy::{
     render::{
         mesh::{MeshVertexAttribute, MeshVertexBufferLayout},
         render_resource::{
-            AsBindGroup, RenderPipelineDescriptor, ShaderRef, SpecializedMeshPipelineError, VertexFormat,
+            AsBindGroup, CompareFunction, RenderPipelineDescriptor, ShaderRef, SpecializedMeshPipelineError,
+            VertexFormat,
         },
     },
 };
@@ -57,6 +58,9 @@ impl Material for CustomMaterial {
     fn fragment_shader() -> ShaderRef {
         "custom_material.wgsl".into()
     }
+    fn alpha_mode(&self) -> AlphaMode {
+        AlphaMode::Blend
+    }
 
     fn specialize(
         _pipeline: &MaterialPipeline<Self>,
@@ -70,6 +74,9 @@ impl Material for CustomMaterial {
             CUSTOM_UV.at_shader_location(2),
             ATTRIBUTE_TEXTURE_INDEX.at_shader_location(3),
         ]);
+        descriptor.depth_stencil.as_mut().unwrap().depth_write_enabled = true;
+        //Ugh FIXME Transparent faces need to be ordered or seperate mesh
+        descriptor.depth_stencil.as_mut().unwrap().depth_compare = CompareFunction::GreaterEqual;
         let vertex_layout = vertex_layout.unwrap();
         descriptor.vertex.buffers = vec![vertex_layout];
         Ok(())

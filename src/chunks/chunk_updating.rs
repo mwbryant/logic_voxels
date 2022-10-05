@@ -1,21 +1,30 @@
-use bevy::render::primitives::Aabb;
+use bevy::{pbr::wireframe::Wireframe, render::primitives::Aabb};
 use bevy_rapier3d::prelude::Collider;
 
 use crate::{client_chunks::create_collider, prelude::*};
 
 pub fn update_dirty_chunks(
     mut commands: Commands,
-    mut chunks: Query<(Entity, &ChunkComp, &mut Handle<Mesh>, &mut Collider)>,
+    mut chunks: Query<(Entity, &ChunkComp, &mut Handle<Mesh>, Option<&mut Collider>)>,
     mut meshes: ResMut<Assets<Mesh>>,
 ) {
     //TODO all of this can be done in parallel except for adding mesh to assets
     //FIXME for now I'm just going to cap the number of chunk updates per frame
     let mut updates = 0;
-    for (entity, chunk, mut mesh, mut collider) in &mut chunks {
+    for (entity, chunk, mut mesh, collider) in &mut chunks {
         if chunk.read_dirty() {
             let data = create_chunk_mesh(&chunk.read_chunk());
             *mesh = meshes.add(data.0);
-            *collider = create_collider(data.1);
+            //TODO move this to physics
+            if let Some(mut old_collider) = collider {
+                if let Some(new_collider) = create_collider(data.1) {
+                    *old_collider = new_collider;
+                } else {
+                    commands.entity(entity).remove::<Collider>();
+                }
+            } else if let Some(new_collider) = create_collider(data.1) {
+                commands.entity(entity).insert(new_collider);
+            }
             //Remove because it needs to be recalculated by bevy
             commands.entity(entity).remove::<Aabb>();
             updates += 1;

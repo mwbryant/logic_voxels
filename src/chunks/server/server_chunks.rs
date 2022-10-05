@@ -120,7 +120,7 @@ fn gen_chunk(chunk_x: i32, chunk_y: i32, chunk_z: i32) -> Chunk {
                             ])
                             + 0.06);
                     //if value >= (y as f32 / CHUNK_SIZE as f32) as f64 || y == 0 {
-                    if value >= 0.5 {
+                    if value >= 0.95 {
                         chunk.cubes[x][y][z] = Block::Grass
                     }
                 }

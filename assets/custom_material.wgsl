@@ -12,8 +12,9 @@ struct Vertex {
 
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
-    @location(0) uvs: vec2<f32>,
-    @location(1) index: u32,
+    @location(1) normals: vec2<u32>,
+    @location(2) uvs: vec2<f32>,
+    @location(3) index: u32,
 };
 
 @vertex
@@ -33,6 +34,7 @@ fn vertex(vertex: Vertex) -> VertexOutput {
     }
 
     out.index = vertex.index;
+    out.normals = vertex.normals;
     return out;
 }
 
@@ -53,6 +55,6 @@ fn fragment(input: VertexOutput) -> @location(0) vec4<f32> {
 
     //return vec4<f32>(0.5,0.5,0.5,0.5);
 
-    //return vec4<f32>(f32(input.index & u32(0x00F0)) /16.0, f32(input.uvs.x), 0.0, 1.0);
+    //return vec4<f32>(f32(input.normals[1]) / 3.0);
     return textureSample(array_texture, texture_sampler, input.uvs, i32(input.index));
 }

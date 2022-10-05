@@ -6,7 +6,8 @@ pub enum Block {
     Air,
     Grass,
     Dirt,
-    Red,
+    Metal,
+    Glass,
 }
 
 impl Block {
@@ -23,7 +24,12 @@ impl Block {
                 Direction::Bottom => 2,
             },
             Block::Dirt => 2,
-            Block::Red => 3,
+            Block::Metal => match direction {
+                Direction::Front | Direction::Back | Direction::Left | Direction::Right => 3,
+                Direction::Top => 5,
+                Direction::Bottom => 6,
+            },
+            Block::Glass => 4,
         }
     }
 }
