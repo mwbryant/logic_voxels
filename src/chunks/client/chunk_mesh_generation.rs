@@ -7,20 +7,23 @@ use bevy::render::{
     render_resource::PrimitiveTopology,
 };
 
-#[derive(Default)]
+//FIXME remove clone
+#[derive(Default, Clone)]
 pub struct MeshDescription {
-    verts: Vec<Vec3>,
+    pub verts: Vec<Vec3>,
     normals: Vec<[u8; 2]>,
     uvs: Vec<[u8; 2]>,
     texture_indices: Vec<u32>,
-    vert_indicies: Vec<usize>,
+    pub vert_indicies: Vec<usize>,
 }
 
-pub fn create_chunk_mesh(chunk: &Chunk) -> Mesh {
+pub fn create_chunk_mesh(chunk: &Chunk) -> (Mesh, MeshDescription) {
     let mut mesh = Mesh::new(PrimitiveTopology::TriangleList);
     let mut description = MeshDescription::default();
 
     create_mesh_faces(chunk, &mut description);
+    //FIXME I hate this clone
+    let to_return = description.clone();
 
     mesh.insert_attribute(
         Mesh::ATTRIBUTE_POSITION,
@@ -56,7 +59,7 @@ pub fn create_chunk_mesh(chunk: &Chunk) -> Mesh {
 
     mesh.insert_attribute(ATTRIBUTE_TEXTURE_INDEX, description.texture_indices);
 
-    mesh
+    (mesh, to_return)
 }
 
 // A single slide of a chunk, direction agnostic, used for greedy meshing

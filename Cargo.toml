@@ -29,3 +29,4 @@ bincode = "1.3.1"
 bevy_renet = "0.0.5"
 renet_visualizer = "0.0.2"
 lz4 = "1.21.0"
+bevy_rapier3d = { version = "*", features = [ "simd-stable",  "parallel" ] }

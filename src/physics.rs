@@ -1,6 +1,8 @@
 use bevy::{ecs::event::ManualEventReader, input::mouse::MouseMotion};
 use bevy_flycam::MovementSettings;
 
+use bevy_rapier3d::prelude::*;
+
 use crate::prelude::*;
 
 pub struct PhysicsPlugin;
@@ -43,6 +45,8 @@ impl Plugin for PhysicsPlugin {
     fn build(&self, app: &mut App) {
         app
             //.add_plugin(NoCameraPlayerPlugin)
+            .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
+            //.add_plugin(RapierDebugRenderPlugin::default())
             .init_resource::<InputState>()
             .init_resource::<MovementSettings>()
             .insert_resource(Gravity(MetersPerSecond2(-1.0)))
@@ -67,6 +71,10 @@ fn test_physics(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>, mut ma
             material: mats.add(Color::RED.into()),
             ..default()
         })
+        .insert(RigidBody::Dynamic)
+        .insert(Collider::cuboid(0.5, 0.5, 0.5))
+        .insert(GravityScale(0.1))
+        .insert(Restitution::coefficient(0.7))
         .insert(PhysicsCube { length: Meters(1.0) })
         .insert(PhysicsObject::default());
 }
@@ -108,17 +116,10 @@ fn voxel_cube_collision(
         //Bigger cubes need to check more than just their 8 corners
         assert!(cube.length.0 <= 1.0);
         let next_position = try_physics_velocity(transform, &physics, &time);
-        let y_min = next_position.y - cube.length.0 / 2.0;
-        let y_max = next_position.y + cube.length.0 / 2.0;
-        let x_min = next_position.x - cube.length.0 / 2.0;
-        let x_max = next_position.x + cube.length.0 / 2.0;
-        let z_min = next_position.z - cube.length.0 / 2.0;
-        let z_max = next_position.z + cube.length.0 / 2.0;
+        let min = next_position - Vec3::splat(cube.length.0 / 2.0);
+        let max = next_position + Vec3::splat(cube.length.0 / 2.0);
         // https://developer.mozilla.org/en-US/docs/Games/Techniques/3D_collision_detection
-        let aabb = Aabb {
-            min: Vec3::new(x_min, y_min, z_min),
-            max: Vec3::new(x_max, y_max, z_max),
-        };
+        let aabb = Aabb { min, max };
 
         for corner in aabb.corners() {
             if check_point_collision(corner, &chunks, &chunk_comps) {
@@ -136,6 +137,9 @@ fn check_point_collision(point: Vec3, chunks: &LoadedChunks, chunk_comps: &Query
                 return true;
             }
         }
+    } else {
+        //TODO what is the intended collision result if no chunk is loaded
+        return true;
     }
     false
 }
@@ -158,7 +162,7 @@ fn apply_physics_velocity(
         if physics.velocity.length() > terminal_velocity.0 {
             physics.velocity = physics.velocity.normalize() * terminal_velocity.0;
         }
-        transform.translation = try_physics_velocity(&transform, &physics, &time);
+        //transform.translation = try_physics_velocity(&transform, &physics, &time);
     }
 }
 

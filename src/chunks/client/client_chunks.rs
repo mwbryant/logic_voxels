@@ -4,6 +4,7 @@ use bevy::{
     tasks::{AsyncComputeTaskPool, Task},
     utils::{FloatOrd, HashMap},
 };
+use bevy_rapier3d::prelude::{Collider, RigidBody};
 use futures_lite::future;
 
 use crate::client::click_detection::*;
@@ -35,7 +36,7 @@ impl Plugin for ClientChunkPlugin {
 }
 
 #[derive(Component)]
-pub struct CreateChunkTask(Task<(Chunk, Mesh)>);
+pub struct CreateChunkTask(Task<(Chunk, Mesh, MeshDescription)>);
 
 pub fn load_chunks_from_server(mut commands: Commands, messages: Res<CurrentClientBlockMessages>) {
     for message in messages.iter() {
@@ -44,8 +45,8 @@ pub fn load_chunks_from_server(mut commands: Commands, messages: Res<CurrentClie
             let thread_pool = AsyncComputeTaskPool::get();
             let task = thread_pool.spawn(async move {
                 let _span = info_span!("Chunk Generation Task", name = "Chunk Generation Task").entered();
-                let mesh = create_chunk_mesh(&chunk_data);
-                (chunk_data, mesh)
+                let (mesh, desc) = create_chunk_mesh(&chunk_data);
+                (chunk_data, mesh, desc)
             });
             commands.spawn().insert(CreateChunkTask(task));
         }
@@ -91,7 +92,7 @@ pub fn spawn_chunk_meshes(
     let mut spawned_this_frame = HashMap::default();
     let mut updates = 0;
     for (ent, mut task) in &mut tasks {
-        if let Some((chunk, mesh)) = future::block_on(future::poll_once(&mut task.0)) {
+        if let Some((chunk, mesh, mesh_data)) = future::block_on(future::poll_once(&mut task.0)) {
             let chunk_pos = chunk.pos;
             let pos = CHUNK_SIZE as i32 * chunk.pos;
 
@@ -179,17 +180,20 @@ pub fn spawn_chunk_meshes(
                 &arc,
                 &spawned_this_frame,
             );
+            commands
+                .entity(ent)
+                .insert_bundle(MaterialMeshBundle {
+                    mesh: meshes.add(mesh),
+                    //mesh: meshes.add(shape::Box::default().into()),
+                    material: materials.add(CustomMaterial {
+                        textures: texture.0.clone(),
+                    }),
+                    transform: Transform::from_xyz(pos.x as f32, pos.y as f32, pos.z as f32),
 
-            commands.entity(ent).insert_bundle(MaterialMeshBundle {
-                mesh: meshes.add(mesh),
-                //mesh: meshes.add(shape::Box::default().into()),
-                material: materials.add(CustomMaterial {
-                    textures: texture.0.clone(),
-                }),
-                transform: Transform::from_xyz(pos.x as f32, pos.y as f32, pos.z as f32),
-
-                ..default()
-            });
+                    ..default()
+                })
+                .insert(RigidBody::Fixed)
+                .insert(create_collider(mesh_data));
             //.insert(Wireframe);
             spawned_this_frame.insert(ent, arc);
 
@@ -203,4 +207,18 @@ pub fn spawn_chunk_meshes(
     for (ent, comp) in spawned_this_frame.into_iter() {
         commands.entity(ent).insert(comp);
     }
+}
+
+pub fn create_collider(desc: MeshDescription) -> Collider {
+    let tri_count = desc.vert_indicies.len() / 3;
+    let mut indices = Vec::with_capacity(tri_count);
+    //TODO this can be done in a seperate function and probably in a better way
+    for index in 0..tri_count {
+        indices.push([
+            desc.vert_indicies[index * 3] as u32,
+            desc.vert_indicies[index * 3 + 1] as u32,
+            desc.vert_indicies[index * 3 + 2] as u32,
+        ]);
+    }
+    Collider::trimesh(desc.verts, indices)
 }

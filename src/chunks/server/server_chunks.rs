@@ -75,6 +75,7 @@ fn server_place_blocks(
             let (chunk_pos, offset) = Chunk::i_world_to_chunk(*pos);
             if let Some(chunk) = loaded_chunks.ent_map.get(&chunk_pos) {
                 let chunk = comps.get(*chunk).unwrap();
+                info!("Writing to {}, {} {}", pos, chunk_pos, offset);
                 chunk.write_block(offset, *block);
                 ServerBlockMessage::Chunk(chunk.read_chunk().compress()).broadcast_except(&mut server, *id);
             } else {

@@ -25,9 +25,16 @@ fn create_renet_client(server_addr: SocketAddr) -> RenetClient {
     };
     RenetClient::new(current_time, socket, client_id, connection_config, authentication).unwrap()
 }
+// If any error is found we just panic
+fn panic_on_error_system(mut renet_error: EventReader<RenetError>) {
+    for e in renet_error.iter() {
+        panic!("{}", e);
+    }
+}
 
 fn main() {
     App::new()
+        .add_system(panic_on_error_system)
         .insert_resource(ImageSettings {
             default_sampler: SamplerDescriptor {
                 address_mode_u: AddressMode::Repeat,

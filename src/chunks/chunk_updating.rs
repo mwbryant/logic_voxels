@@ -1,18 +1,21 @@
 use bevy::render::primitives::Aabb;
+use bevy_rapier3d::prelude::Collider;
 
-use crate::prelude::*;
+use crate::{client_chunks::create_collider, prelude::*};
 
 pub fn update_dirty_chunks(
     mut commands: Commands,
-    mut chunks: Query<(Entity, &ChunkComp, &mut Handle<Mesh>)>,
+    mut chunks: Query<(Entity, &ChunkComp, &mut Handle<Mesh>, &mut Collider)>,
     mut meshes: ResMut<Assets<Mesh>>,
 ) {
     //TODO all of this can be done in parallel except for adding mesh to assets
     //FIXME for now I'm just going to cap the number of chunk updates per frame
     let mut updates = 0;
-    for (entity, chunk, mut mesh) in &mut chunks {
+    for (entity, chunk, mut mesh, mut collider) in &mut chunks {
         if chunk.read_dirty() {
-            *mesh = meshes.add(create_chunk_mesh(&chunk.read_chunk()));
+            let data = create_chunk_mesh(&chunk.read_chunk());
+            *mesh = meshes.add(data.0);
+            *collider = create_collider(data.1);
             //Remove because it needs to be recalculated by bevy
             commands.entity(entity).remove::<Aabb>();
             updates += 1;
