@@ -191,9 +191,7 @@ pub fn spawn_chunk_meshes(
 
                 ..default()
             });
-            if let Some(collider) = create_collider(mesh_data) {
-                commands.entity(ent).insert(collider);
-            }
+            add_collider(&mut commands, ent, mesh_data);
             spawned_this_frame.insert(ent, arc);
 
             commands.entity(ent).remove::<CreateChunkTask>();
@@ -205,24 +203,5 @@ pub fn spawn_chunk_meshes(
     }
     for (ent, comp) in spawned_this_frame.into_iter() {
         commands.entity(ent).insert(comp);
-    }
-}
-
-//FIXME move to physics
-pub fn create_collider(desc: MeshDescription) -> Option<Collider> {
-    let tri_count = desc.vert_indicies.len() / 3;
-    let mut indices = Vec::with_capacity(tri_count);
-    //TODO this can be done in a seperate function and probably in a better way
-    for index in 0..tri_count {
-        indices.push([
-            desc.vert_indicies[index * 3] as u32,
-            desc.vert_indicies[index * 3 + 1] as u32,
-            desc.vert_indicies[index * 3 + 2] as u32,
-        ]);
-    }
-    if tri_count > 0 {
-        Some(Collider::trimesh(desc.verts, indices))
-    } else {
-        None
     }
 }

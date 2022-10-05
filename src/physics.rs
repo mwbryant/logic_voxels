@@ -1,4 +1,4 @@
-use bevy::{ecs::event::ManualEventReader, input::mouse::MouseMotion};
+use bevy::{ecs::event::ManualEventReader, input::mouse::MouseMotion, pbr::wireframe::Wireframe};
 use bevy_flycam::MovementSettings;
 
 use bevy_rapier3d::prelude::*;
@@ -253,5 +253,34 @@ fn cursor_grab(keys: Res<Input<KeyCode>>, mut windows: ResMut<Windows>) {
         }
     } else {
         warn!("Primary window not found for `cursor_grab`!");
+    }
+}
+pub fn add_collider(commands: &mut Commands, entity: Entity, desc: MeshDescription) {
+    if let Some(new_collider) = create_collider(desc) {
+        info!("Created collider! {:?}", entity);
+        commands.entity(entity).insert(new_collider).insert(Wireframe);
+    } else {
+        info!("Removed collider! {:?}", entity);
+        commands.entity(entity).remove::<Collider>();
+        commands.entity(entity).remove::<Wireframe>();
+    }
+}
+
+//FIXME move to physics
+pub fn create_collider(desc: MeshDescription) -> Option<Collider> {
+    let tri_count = desc.vert_indicies.len() / 3;
+    let mut indices = Vec::with_capacity(tri_count);
+    //TODO this can be done in a seperate function and probably in a better way
+    for index in 0..tri_count {
+        indices.push([
+            desc.vert_indicies[index * 3] as u32,
+            desc.vert_indicies[index * 3 + 1] as u32,
+            desc.vert_indicies[index * 3 + 2] as u32,
+        ]);
+    }
+    if tri_count > 0 {
+        Some(Collider::trimesh(desc.verts, indices))
+    } else {
+        None
     }
 }
