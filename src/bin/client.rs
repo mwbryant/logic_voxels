@@ -3,8 +3,7 @@ use std::{
     time::{Duration, SystemTime},
 };
 
-use bevy::{ecs::event::ManualEventReader, input::mouse::MouseMotion, log::LogSettings};
-use bevy_flycam::MovementSettings;
+use bevy::log::LogSettings;
 use bevy_inspector_egui::{bevy_egui::EguiContext, egui};
 use logic_voxels::{client_chunks::ClientChunkPlugin, *};
 

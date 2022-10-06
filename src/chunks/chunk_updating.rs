@@ -1,5 +1,4 @@
-use bevy::{pbr::wireframe::Wireframe, render::primitives::Aabb};
-use bevy_rapier3d::prelude::Collider;
+use bevy::render::primitives::Aabb;
 
 use crate::prelude::*;
 

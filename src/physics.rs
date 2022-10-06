@@ -1,4 +1,4 @@
-use bevy::{ecs::event::ManualEventReader, input::mouse::MouseMotion, pbr::wireframe::Wireframe};
+use bevy::{ecs::event::ManualEventReader, input::mouse::MouseMotion};
 use bevy_flycam::MovementSettings;
 
 use bevy_rapier3d::prelude::*;
@@ -25,6 +25,7 @@ pub struct Kilograms(f32);
 // Use dim analysis 7 dim vector?
 #[derive(Deref, DerefMut)]
 pub struct MetersPerSecond2(f32);
+
 #[derive(Deref, DerefMut)]
 pub struct Meters(f32);
 
@@ -49,11 +50,6 @@ impl Plugin for PhysicsPlugin {
             //.add_plugin(RapierDebugRenderPlugin::default())
             .init_resource::<InputState>()
             .init_resource::<MovementSettings>()
-            .insert_resource(Gravity(MetersPerSecond2(-1.0)))
-            .insert_resource(TerminalVelocity(100.0))
-            .add_system_to_stage(CoreStage::PostUpdate, apply_physics_velocity)
-            .add_system(apply_physics_gravity)
-            .add_system(voxel_cube_collision.after(apply_physics_gravity))
             .add_system_set(SystemSet::on_enter(ClientState::Gameplay).with_system(test_physics))
             .add_system_set(
                 SystemSet::on_update(ClientState::Gameplay)
@@ -77,93 +73,6 @@ fn test_physics(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>, mut ma
         .insert(Restitution::coefficient(0.7))
         .insert(PhysicsCube { length: Meters(1.0) })
         .insert(PhysicsObject::default());
-}
-
-pub struct Aabb {
-    min: Vec3,
-    max: Vec3,
-}
-
-impl Aabb {
-    pub fn corners(&self) -> Vec<Vec3> {
-        vec![
-            Vec3::new(self.min.x, self.min.y, self.min.z),
-            Vec3::new(self.max.x, self.min.y, self.min.z),
-            Vec3::new(self.min.x, self.max.y, self.min.z),
-            Vec3::new(self.max.x, self.max.y, self.min.z),
-            Vec3::new(self.min.x, self.min.y, self.max.z),
-            Vec3::new(self.max.x, self.min.y, self.max.z),
-            Vec3::new(self.min.x, self.max.y, self.max.z),
-            Vec3::new(self.max.x, self.max.y, self.max.z),
-        ]
-    }
-}
-
-fn voxel_cube_collision(
-    mut physics: Query<(
-        &Transform,
-        &mut PhysicsObject,
-        &mut Handle<StandardMaterial>,
-        &PhysicsCube,
-    )>,
-    chunks: Res<LoadedChunks>,
-    chunk_comps: Query<&ChunkComp>,
-    mut mats: ResMut<Assets<StandardMaterial>>,
-    time: Res<Time>,
-) {
-    for (transform, mut physics, mut material, cube) in &mut physics {
-        //Ugh I hate physics
-        //Bigger cubes need to check more than just their 8 corners
-        assert!(cube.length.0 <= 1.0);
-        let next_position = try_physics_velocity(transform, &physics, &time);
-        let min = next_position - Vec3::splat(cube.length.0 / 2.0);
-        let max = next_position + Vec3::splat(cube.length.0 / 2.0);
-        // https://developer.mozilla.org/en-US/docs/Games/Techniques/3D_collision_detection
-        let aabb = Aabb { min, max };
-
-        for corner in aabb.corners() {
-            if check_point_collision(corner, &chunks, &chunk_comps) {
-                physics.velocity = Vec3::ZERO;
-            }
-        }
-    }
-}
-
-fn check_point_collision(point: Vec3, chunks: &LoadedChunks, chunk_comps: &Query<&ChunkComp>) -> bool {
-    let (chunk_pos, offset) = Chunk::world_to_chunk(point);
-    if let Some(chunk_ent) = chunks.ent_map.get(&chunk_pos) {
-        if let Ok(chunk_comp) = chunk_comps.get(*chunk_ent) {
-            if chunk_comp.read_block(offset) != Block::Air {
-                return true;
-            }
-        }
-    } else {
-        //TODO what is the intended collision result if no chunk is loaded
-        return true;
-    }
-    false
-}
-
-fn apply_physics_gravity(mut physics: Query<&mut PhysicsObject>, gravity: Res<Gravity>, time: Res<Time>) {
-    for mut physics in &mut physics {
-        physics.velocity.y += gravity.0 .0 * time.delta_seconds();
-    }
-}
-fn try_physics_velocity(transform: &Transform, physics: &PhysicsObject, time: &Time) -> Vec3 {
-    transform.translation + physics.velocity * time.delta_seconds()
-}
-
-fn apply_physics_velocity(
-    mut transforms: Query<(&mut Transform, &mut PhysicsObject)>,
-    time: Res<Time>,
-    terminal_velocity: Res<TerminalVelocity>,
-) {
-    for (mut transform, mut physics) in &mut transforms {
-        if physics.velocity.length() > terminal_velocity.0 {
-            physics.velocity = physics.velocity.normalize() * terminal_velocity.0;
-        }
-        //transform.translation = try_physics_velocity(&transform, &physics, &time);
-    }
 }
 
 //Yoinked from NoCameraPlayerPlugin to allow working with system sets
@@ -255,22 +164,18 @@ fn cursor_grab(keys: Res<Input<KeyCode>>, mut windows: ResMut<Windows>) {
         warn!("Primary window not found for `cursor_grab`!");
     }
 }
+
 pub fn add_collider(commands: &mut Commands, entity: Entity, desc: MeshDescription) {
     if let Some(new_collider) = create_collider(desc) {
-        info!("Created collider! {:?}", entity);
-        commands.entity(entity).insert(new_collider).insert(Wireframe);
+        commands.entity(entity).insert(new_collider);
     } else {
-        info!("Removed collider! {:?}", entity);
         commands.entity(entity).remove::<Collider>();
-        commands.entity(entity).remove::<Wireframe>();
     }
 }
 
-//FIXME move to physics
 pub fn create_collider(desc: MeshDescription) -> Option<Collider> {
     let tri_count = desc.vert_indicies.len() / 3;
     let mut indices = Vec::with_capacity(tri_count);
-    //TODO this can be done in a seperate function and probably in a better way
     for index in 0..tri_count {
         indices.push([
             desc.vert_indicies[index * 3] as u32,

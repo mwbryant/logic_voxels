@@ -1,11 +1,9 @@
 use std::sync::{Arc, RwLock};
 
 use bevy::{
-    pbr::wireframe::Wireframe,
     tasks::{AsyncComputeTaskPool, Task},
     utils::{FloatOrd, HashMap},
 };
-use bevy_rapier3d::prelude::{Collider, RigidBody};
 use futures_lite::future;
 
 use crate::client::click_detection::*;

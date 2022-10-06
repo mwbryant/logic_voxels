@@ -63,48 +63,91 @@ pub enum ClientMessage {
     RequestChunk(IVec3),
 }
 
+pub enum SendError {
+    CannotSend,
+}
+
 impl ServerBlockMessage {
-    pub fn send(&self, server: &mut RenetServer, id: u64) {
-        let message = bincode::serialize(self).unwrap();
-        server.send_message(id, Channel::Block.id(), message);
+    pub fn send(&self, server: &mut RenetServer, id: u64) -> Result<(), SendError> {
+        if server.can_send_message(id, Channel::Block.id()) {
+            let message = bincode::serialize(self).unwrap();
+            server.send_message(id, Channel::Block.id(), message);
+            Ok(())
+        } else {
+            Err(SendError::CannotSend)
+        }
     }
 
-    pub fn broadcast(&self, server: &mut RenetServer) {
+    pub fn broadcast(&self, server: &mut RenetServer) -> Result<(), SendError> {
+        for id in server.clients_id() {
+            if !server.can_send_message(id, Channel::Block.id()) {
+                return Err(SendError::CannotSend);
+            }
+        }
         let message = bincode::serialize(self).unwrap();
         server.broadcast_message(Channel::Block.id(), message);
+        Ok(())
     }
 
-    pub fn broadcast_except(&self, server: &mut RenetServer, id: u64) {
+    pub fn broadcast_except(&self, server: &mut RenetServer, id: u64) -> Result<(), SendError> {
+        info!("Trying to send!");
+        for all_id in server.clients_id() {
+            if all_id == id {
+                continue;
+            }
+            if !server.can_send_message(id, Channel::Block.id()) {
+                return Err(SendError::CannotSend);
+            }
+        }
         let message = bincode::serialize(self).unwrap();
         server.broadcast_message_except(id, Channel::Block.id(), message);
+        Ok(())
     }
 }
 
 impl ServerMessage {
-    pub fn send(&self, server: &mut RenetServer, id: u64) {
+    pub fn send(&self, server: &mut RenetServer, id: u64) -> Result<(), SendError> {
+        //TODO only in debug please
+        if server.can_send_message(id, Channel::Reliable.id()) {
+            return Err(SendError::CannotSend);
+        }
         let message = bincode::serialize(self).unwrap();
         match self {
             ServerMessage::Pong => server.send_message(id, Channel::Reliable.id(), message),
         }
+        Ok(())
     }
 
-    pub fn broadcast(&self, server: &mut RenetServer) {
+    pub fn broadcast(&self, server: &mut RenetServer) -> Result<(), SendError> {
+        //TODO only in debug please
+        for id in server.clients_id() {
+            if server.can_send_message(id, Channel::Reliable.id()) {
+                return Err(SendError::CannotSend);
+            }
+        }
         let message = bincode::serialize(self).unwrap();
         match self {
             ServerMessage::Pong => server.broadcast_message(Channel::Reliable.id(), message),
         }
+        Ok(())
     }
 
-    pub fn broadcast_except(&self, server: &mut RenetServer, id: u64) {
+    pub fn broadcast_except(&self, server: &mut RenetServer, id: u64) -> Result<(), SendError> {
+        for id in server.clients_id() {
+            if server.can_send_message(id, Channel::Reliable.id()) {
+                return Err(SendError::CannotSend);
+            }
+        }
         let message = bincode::serialize(self).unwrap();
         match self {
             ServerMessage::Pong => server.broadcast_message_except(id, Channel::Reliable.id(), message),
         }
+        Ok(())
     }
 }
 
 impl ClientMessage {
-    pub fn send(&self, client: &mut RenetClient) {
+    pub fn send(&self, client: &mut RenetClient) -> Result<(), SendError> {
         let message = bincode::serialize(self).unwrap();
         match self {
             ClientMessage::Ping
@@ -112,9 +155,10 @@ impl ClientMessage {
             | ClientMessage::BreakBlock(..)
             | ClientMessage::PlaceBlock(..) => {
                 if client.can_send_message(Channel::Reliable.id()) {
-                    client.send_message(Channel::Reliable.id(), message)
+                    client.send_message(Channel::Reliable.id(), message);
+                    Ok(())
                 } else {
-                    error!("Cannot send message! {:?}", self);
+                    Err(SendError::CannotSend)
                 }
             }
         }

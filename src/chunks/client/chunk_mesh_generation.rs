@@ -1,5 +1,3 @@
-use std::f32::consts::PI;
-
 use crate::client::material::*;
 use crate::prelude::*;
 use bevy::render::{
@@ -260,13 +258,6 @@ fn create_greedy_face(
     let new_uvs = [[0, height as u8], [width as u8, height as u8], [width as u8, 0], [0, 0]];
 
     let new_texture_indices = [block.get_face_index(dir); 4];
-    let mut new_normals = [
-        Vec3::new(0.0, 1.0, 0.0),
-        Vec3::new(0.0, 1.0, 0.0),
-        Vec3::new(0.0, 1.0, 0.0),
-        Vec3::new(0.0, 1.0, 0.0),
-    ];
-
     let new_normals = match dir {
         Direction::Front => [
             Vec3::new(1.0, 0.0, 0.0),
