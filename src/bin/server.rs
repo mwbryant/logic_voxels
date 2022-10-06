@@ -119,25 +119,6 @@ fn server_recieve_messages(mut server: ResMut<RenetServer>, mut messages: ResMut
     }
 }
 
-/*
-fn place_blocks(
-    loaded_chunks: Res<LoadedChunks>,
-    comps: Query<&ChunkComp>,
-) {
-    for ev in click_reader.iter() {
-        if ev.button == MouseButton::Right {
-            let (chunk_pos, offset) = Chunk::world_to_chunk(ev.prev_pos);
-            if let Some(chunk) = loaded_chunks.ent_map.get(&chunk_pos) {
-                let chunk = comps.get(*chunk).unwrap();
-                if chunk.read_block(offset) == Block::Air {
-                    ClientMessage::PlaceBlock(offset, Block::Red).send(&mut client);
-                    chunk.write_block(offset, Block::Red);
-                }
-            }
-        }
-    }
-}
-*/
 fn ping_test(messages: Res<CurrentServerMessages>, mut server: ResMut<RenetServer>) {
     for (id, message) in messages.iter() {
         if matches!(message, ClientMessage::Ping) {

@@ -37,8 +37,8 @@ pub(crate) fn click_to_place(
             if let Some(chunk) = loaded_chunks.ent_map.get(&chunk_pos) {
                 let chunk = comps.get(*chunk).unwrap();
                 if chunk.read_block(offset) == Block::Air {
-                    ClientMessage::PlaceBlock(ev.prev_pos, Block::Metal).send(&mut client);
-                    chunk.write_block(offset, Block::Metal);
+                    ClientMessage::PlaceBlock(ev.prev_pos, Block::Machine).send(&mut client);
+                    chunk.write_block(offset, Block::Machine);
                 }
             }
         }

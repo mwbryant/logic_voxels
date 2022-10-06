@@ -8,6 +8,7 @@ pub enum Block {
     Dirt,
     Metal,
     Glass,
+    Machine,
 }
 
 impl Block {
@@ -30,6 +31,11 @@ impl Block {
                 Direction::Bottom => 6,
             },
             Block::Glass => 4,
+            Block::Machine => match direction {
+                Direction::Front | Direction::Back | Direction::Left | Direction::Right => 7,
+                Direction::Top => 5,
+                Direction::Bottom => 6,
+            },
         }
     }
 }

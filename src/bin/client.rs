@@ -3,7 +3,7 @@ use std::{
     time::{Duration, SystemTime},
 };
 
-use bevy::log::LogSettings;
+use bevy::{app::AppExit, log::LogSettings};
 use bevy_inspector_egui::{bevy_egui::EguiContext, egui};
 use logic_voxels::{client_chunks::ClientChunkPlugin, *};
 
@@ -25,9 +25,16 @@ fn create_renet_client(server_addr: SocketAddr) -> RenetClient {
     RenetClient::new(current_time, socket, client_id, connection_config, authentication).unwrap()
 }
 // If any error is found we just panic
-fn panic_on_error_system(mut renet_error: EventReader<RenetError>) {
+fn panic_on_error_system(mut renet_error: EventReader<RenetError>, mut exit: EventWriter<AppExit>) {
     for e in renet_error.iter() {
-        panic!("{}", e);
+        if matches!(e, RenetError::Rechannel(RechannelError::ClientDisconnected(..)))
+            || matches!(e, RenetError::Netcode(NetcodeError::Disconnected(..)))
+        {
+            warn!("Server disconnected! Shutting down");
+            exit.send(AppExit);
+        } else {
+            panic!("{}", e);
+        }
     }
 }
 

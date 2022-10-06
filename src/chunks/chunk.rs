@@ -7,6 +7,7 @@ use crate::prelude::*;
 #[derive(Component)]
 pub struct ChunkComp {
     chunk: Arc<RwLock<Chunk>>,
+    associated_entities: HashMap<IVec3, Entity>,
     buffered_writes: Vec<BufferedWrite>,
 }
 
@@ -19,6 +20,7 @@ impl ChunkComp {
     pub fn new(chunk: Arc<RwLock<Chunk>>) -> Self {
         ChunkComp {
             chunk,
+            associated_entities: HashMap::default(),
             buffered_writes: Vec::default(),
         }
     }
