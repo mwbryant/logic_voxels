@@ -1,6 +1,5 @@
 use std::sync::{Arc, RwLock, Weak};
 
-
 use lz4::block::decompress;
 
 use crate::prelude::*;
@@ -212,7 +211,6 @@ impl ChunkComp {
 type ChunkData = [[[Block; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE];
 pub type CompressedChunk = Vec<u8>;
 
-//TODO serialize?
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Chunk {
     pub pos: IVec3,

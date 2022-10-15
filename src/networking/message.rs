@@ -70,7 +70,6 @@ impl ServerBlockMessage {
 
 impl ServerMessage {
     pub fn send(&self, server: &mut RenetServer, id: u64) -> Result<(), SendError> {
-        //TODO only in debug please
         if server.can_send_message(id, Channel::Reliable.id()) {
             return Err(SendError::CannotSend);
         }

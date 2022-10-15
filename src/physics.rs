@@ -7,41 +7,6 @@ use crate::prelude::*;
 
 pub struct PhysicsPlugin;
 
-#[derive(Component)]
-pub struct PhysicsObject {
-    //This vec3 is meters per second.. hmm
-    pub velocity: Vec3,
-    pub mass: Kilograms,
-}
-
-#[derive(Component)]
-pub struct PhysicsCube {
-    pub length: Meters,
-}
-
-#[derive(Deref, DerefMut)]
-pub struct Kilograms(f32);
-//Find a better way
-// Use dim analysis 7 dim vector?
-#[derive(Deref, DerefMut)]
-pub struct MetersPerSecond2(f32);
-
-#[derive(Deref, DerefMut)]
-pub struct Meters(f32);
-
-impl Default for PhysicsObject {
-    fn default() -> Self {
-        Self {
-            velocity: Vec3::ZERO,
-            mass: Kilograms(100.0),
-        }
-    }
-}
-
-//TODO this should be caused by a gravity generator or something, more dynamic
-pub struct Gravity(MetersPerSecond2);
-pub struct TerminalVelocity(f32);
-
 impl Plugin for PhysicsPlugin {
     fn build(&self, app: &mut App) {
         app
@@ -70,9 +35,7 @@ fn test_physics(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>, mut ma
         .insert(RigidBody::Dynamic)
         .insert(Collider::cuboid(0.5, 0.5, 0.5))
         .insert(GravityScale(0.1))
-        .insert(Restitution::coefficient(0.7))
-        .insert(PhysicsCube { length: Meters(1.0) })
-        .insert(PhysicsObject::default());
+        .insert(Restitution::coefficient(0.7));
 }
 
 //Yoinked from NoCameraPlayerPlugin to allow working with system sets

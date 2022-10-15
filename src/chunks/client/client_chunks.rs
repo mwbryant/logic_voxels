@@ -19,11 +19,10 @@ impl Plugin for ClientChunkPlugin {
             .add_system_set(
                 SystemSet::on_enter(ClientState::Gameplay)
                     .with_system(initial_chunk_requests)
+                    //TODO run on image loaded
                     .with_system(create_array_texture),
             )
             .add_system(load_chunks_from_server)
-            //TODO run on image loaded
-            //.add_system(create_array_texture)
             .add_system(update_dirt_sys)
             .add_system(update_dirty_chunks)
             .add_system_to_stage(CoreStage::PostUpdate, apply_buffered_chunk_writes)

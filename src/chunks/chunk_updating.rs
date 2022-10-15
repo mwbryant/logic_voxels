@@ -15,7 +15,6 @@ pub fn update_dirty_chunks(
             let data = create_chunk_mesh(&chunk.read_chunk());
             *mesh = meshes.add(data.0);
             add_collider(&mut commands, entity, data.1);
-            //TODO move this to physics
 
             //Remove because it needs to be recalculated by bevy
             commands.entity(entity).remove::<Aabb>();
