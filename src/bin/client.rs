@@ -58,6 +58,6 @@ fn main() {
         .add_plugin(WorldInspectorPlugin::default())
         .add_plugin(WireframePlugin)
         .add_startup_system(spawn_camera)
-        .add_system_set(SystemSet::on_update(ClientState::Gameplay).with_system(ping_test))
+        .add_system_set(SystemSet::on_update(ClientState::Gameplay).with_system(client_ping_test))
         .run();
 }

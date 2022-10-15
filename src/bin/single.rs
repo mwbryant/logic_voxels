@@ -38,20 +38,19 @@ fn main() {
             ..default()
         })
         .add_stage_after(CoreStage::PreUpdate, ReadMessages, SystemStage::parallel())
+        .init_resource::<CurrentServerMessages>()
+        .init_resource::<CurrentClientMessages>()
+        .insert_resource(RenetServerVisualizer::<200>::default())
+        .init_resource::<CurrentClientBlockMessages>()
         .add_state(ClientState::Connecting)
         .add_plugin(RenetClientPlugin)
+        .add_plugin(RenetServerPlugin)
         .insert_resource(create_renet_client("192.168.0.16:5000".parse().unwrap()))
-        .init_resource::<Lobby>()
         .insert_resource(create_renet_server())
+        .init_resource::<Lobby>()
         .add_system(server_connection)
-        .insert_resource(RenetServerVisualizer::<200>::default())
-        .init_resource::<CurrentServerMessages>()
         .add_system_to_stage(ReadMessages, server_recieve_messages)
         .add_plugin(ServerChunkPlugin)
-        .add_system(ping_test)
-        .add_plugin(RenetServerPlugin)
-        .init_resource::<CurrentClientMessages>()
-        .init_resource::<CurrentClientBlockMessages>()
         .add_system_to_stage(
             ReadMessages,
             client_recieve_messages.with_run_criteria(run_if_client_connected),
@@ -66,6 +65,7 @@ fn main() {
         .add_plugin(WorldInspectorPlugin::default())
         .add_plugin(WireframePlugin)
         .add_startup_system(spawn_camera)
-        .add_system_set(SystemSet::on_update(ClientState::Gameplay).with_system(ping_test))
+        .add_system_set(SystemSet::on_update(ClientState::Gameplay).with_system(server_ping_test))
+        .add_system_set(SystemSet::on_update(ClientState::Gameplay).with_system(client_ping_test))
         .run();
 }

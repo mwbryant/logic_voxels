@@ -40,6 +40,6 @@ fn main() {
         .add_stage_after(CoreStage::PreUpdate, ReadMessages, SystemStage::parallel())
         .add_system_to_stage(ReadMessages, server_recieve_messages)
         .add_plugin(ServerChunkPlugin)
-        .add_system(ping_test)
+        .add_system(server_ping_test)
         .run();
 }

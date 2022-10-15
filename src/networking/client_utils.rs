@@ -115,7 +115,11 @@ pub fn client_recieve_messages(
     }
 }
 
-pub fn ping_test(mut client: ResMut<RenetClient>, keyboard: Res<Input<KeyCode>>, messages: Res<CurrentClientMessages>) {
+pub fn client_ping_test(
+    mut client: ResMut<RenetClient>,
+    keyboard: Res<Input<KeyCode>>,
+    messages: Res<CurrentClientMessages>,
+) {
     if keyboard.just_pressed(KeyCode::P) {
         info!("Sending ping!");
         ClientMessage::Ping.send(&mut client);

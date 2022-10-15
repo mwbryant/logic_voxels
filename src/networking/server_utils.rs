@@ -77,14 +77,13 @@ pub fn server_recieve_messages(mut server: ResMut<RenetServer>, mut messages: Re
         for channel in [Channel::Reliable, Channel::Unreliable] {
             while let Some(message) = server.receive_message(client_id, channel.id()) {
                 let client_message = bincode::deserialize(&message).unwrap();
-                info!("Got message {:?}", client_message);
                 messages.push((client_id, client_message));
             }
         }
     }
 }
 
-pub fn ping_test(messages: Res<CurrentServerMessages>, mut server: ResMut<RenetServer>) {
+pub fn server_ping_test(messages: Res<CurrentServerMessages>, mut server: ResMut<RenetServer>) {
     for (id, message) in messages.iter() {
         if matches!(message, ClientMessage::Ping) {
             info!("Got ping from {}!", id);
