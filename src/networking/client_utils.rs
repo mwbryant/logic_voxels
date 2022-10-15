@@ -3,8 +3,8 @@ use std::{
     time::{Duration, SystemTime},
 };
 
-use crate::{client_chunks::ClientChunkPlugin, *};
-use bevy::{app::AppExit, log::LogSettings};
+use crate::{*};
+use bevy::{app::AppExit};
 use bevy_inspector_egui::{bevy_egui::EguiContext, egui};
 
 pub fn create_renet_client(server_addr: SocketAddr) -> RenetClient {

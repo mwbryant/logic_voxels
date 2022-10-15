@@ -24,7 +24,7 @@ fn server_save_and_quit(
     mut egui_context: ResMut<EguiContext>,
     loaded_chunks: Res<LoadedChunks>,
     comps: Query<&ChunkComp>,
-    keyboard: Res<Input<KeyCode>>,
+    _keyboard: Res<Input<KeyCode>>,
     mut exit: EventWriter<AppExit>,
     mut server: ResMut<RenetServer>,
 ) {

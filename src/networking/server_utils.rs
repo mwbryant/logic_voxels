@@ -3,8 +3,8 @@ use std::{
     time::SystemTime,
 };
 
-use crate::{server_chunks::ServerChunkPlugin, *};
-use bevy::log::LogSettings;
+use crate::{*};
+
 use bevy_inspector_egui::bevy_egui::EguiContext;
 use local_ip_address::local_ip;
 use renet_visualizer::RenetServerVisualizer;

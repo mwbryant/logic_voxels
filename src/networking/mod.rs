@@ -15,7 +15,7 @@ pub use bevy_inspector_egui::WorldInspectorPlugin;
 pub use bevy::utils::HashMap;
 pub use bevy_renet::renet::*;
 pub use bevy_renet::*;
-use serde::{Deserialize, Serialize};
+
 
 mod client_utils;
 mod message;
