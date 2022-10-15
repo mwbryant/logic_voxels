@@ -5,7 +5,8 @@ use std::{
 
 use bevy::{app::AppExit, log::LogSettings};
 use bevy_inspector_egui::{bevy_egui::EguiContext, egui};
-use logic_voxels::{client_chunks::ClientChunkPlugin, *};
+use logic_voxels::{client_chunks::ClientChunkPlugin, server_chunks::ServerChunkPlugin, *};
+use renet_visualizer::RenetServerVisualizer;
 
 fn main() {
     App::new()
@@ -36,14 +37,21 @@ fn main() {
             watch_for_changes: true,
             ..default()
         })
-        .add_state(ClientState::MainMenu)
+        .add_stage_after(CoreStage::PreUpdate, ReadMessages, SystemStage::parallel())
+        .add_state(ClientState::Connecting)
         .add_plugin(RenetClientPlugin)
-        //.insert_resource(create_renet_client())
+        .insert_resource(create_renet_client("192.168.0.16:5000".parse().unwrap()))
         .init_resource::<Lobby>()
-        //XXX is this a bad way to do things...
+        .insert_resource(create_renet_server())
+        .add_system(server_connection)
+        .insert_resource(RenetServerVisualizer::<200>::default())
+        .init_resource::<CurrentServerMessages>()
+        .add_system_to_stage(ReadMessages, server_recieve_messages)
+        .add_plugin(ServerChunkPlugin)
+        .add_system(ping_test)
+        .add_plugin(RenetServerPlugin)
         .init_resource::<CurrentClientMessages>()
         .init_resource::<CurrentClientBlockMessages>()
-        .add_stage_after(CoreStage::PreUpdate, ReadMessages, SystemStage::parallel())
         .add_system_to_stage(
             ReadMessages,
             client_recieve_messages.with_run_criteria(run_if_client_connected),

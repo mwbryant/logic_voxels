@@ -90,7 +90,6 @@ impl ServerBlockMessage {
     }
 
     pub fn broadcast_except(&self, server: &mut RenetServer, id: u64) -> Result<(), SendError> {
-        info!("Trying to send!");
         for all_id in server.clients_id() {
             if all_id == id {
                 continue;

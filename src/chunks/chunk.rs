@@ -1,5 +1,6 @@
 use std::sync::{Arc, RwLock, Weak};
 
+use bevy::render::primitives::Frustum;
 use lz4::block::decompress;
 
 use crate::prelude::*;
@@ -9,6 +10,68 @@ pub struct ChunkComp {
     chunk: Arc<RwLock<Chunk>>,
     associated_entities: HashMap<IVec3, Entity>,
     buffered_writes: Vec<BufferedWrite>,
+}
+
+#[derive(Component, Clone, Serialize, Deserialize)]
+pub struct BlockController {
+    block: Block,
+}
+
+#[derive(Component, Clone, Serialize, Deserialize)]
+pub enum MachineType {
+    Furnace,
+}
+
+#[derive(Component, Clone, Serialize, Deserialize)]
+pub struct Furnace {
+    heat: f32,
+}
+
+#[derive(Bundle, Serialize, Deserialize)]
+pub struct FurnaceBundle {
+    machine: MachineType,
+    furnace: Furnace,
+    controller: BlockController,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct SerializedMachines {
+    furnaces: Vec<FurnaceBundle>,
+}
+
+impl MachineType {
+    fn spawn_machine(&self, commands: &mut Commands) -> Entity {
+        match self {
+            MachineType::Furnace => commands
+                .spawn_bundle(FurnaceBundle {
+                    machine: self.clone(),
+                    furnace: Furnace { heat: 100.0 },
+                    controller: BlockController { block: Block::Machine },
+                })
+                .id(),
+        }
+    }
+    fn serialize_all_machines(
+        //Usually from a chunks associated entities
+        entities: Vec<Entity>,
+        //All the types in the bundle
+        //TODO it would be nice to not need a query for literally every machine type but hmm
+        furnace_query: &Query<(&MachineType, &Furnace, &BlockController)>,
+    ) -> SerializedMachines {
+        let mut to_return = SerializedMachines {
+            furnaces: Vec::default(),
+        };
+        for entity in entities {
+            if let Ok((machine, furnace, controller)) = furnace_query.get(entity) {
+                to_return.furnaces.push(FurnaceBundle {
+                    machine: machine.clone(),
+                    furnace: furnace.clone(),
+                    controller: controller.clone(),
+                });
+            }
+        }
+        to_return
+    }
 }
 
 pub struct BufferedWrite {

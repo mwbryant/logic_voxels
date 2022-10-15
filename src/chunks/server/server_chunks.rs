@@ -29,7 +29,8 @@ fn server_save_and_quit(
     mut server: ResMut<RenetServer>,
 ) {
     egui::Window::new("Quit Server").show(egui_context.ctx_mut(), |ui| {
-        if ui.button("Quit and Save").clicked() || keyboard.just_pressed(KeyCode::Escape) {
+        //if ui.button("Quit and Save").clicked() || keyboard.just_pressed(KeyCode::Escape) {
+        if ui.button("Quit and Save").clicked() {
             for (pos, chunk) in loaded_chunks.ent_map.iter() {
                 let chunk = comps.get(*chunk).unwrap();
                 //Copied from elsewhere! Duplicated code

@@ -31,9 +31,11 @@ pub struct Lobby {
 pub const PROTOCOL_ID: u64 = 1000;
 
 mod chunks;
+mod client_utils;
 mod networking;
 mod physics;
 mod prelude;
+mod server_utils;
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum ClientState {

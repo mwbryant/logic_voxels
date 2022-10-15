@@ -2,7 +2,7 @@
 name = "logic_voxels"
 version = "0.1.0"
 edition = "2021"
-default-run = "client"
+default-run = "single"
 
 [profile.dev]
 opt-level = 0
