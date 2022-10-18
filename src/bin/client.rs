@@ -1,6 +1,4 @@
-
-
-use bevy::{log::LogSettings};
+use bevy::log::LogSettings;
 
 use logic_voxels::{client_chunks::ClientChunkPlugin, *};
 

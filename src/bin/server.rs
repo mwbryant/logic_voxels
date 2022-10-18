@@ -1,7 +1,4 @@
-
-
 use bevy::log::LogSettings;
-
 
 use logic_voxels::{server_chunks::ServerChunkPlugin, *};
 use renet_visualizer::RenetServerVisualizer;

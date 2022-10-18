@@ -3,7 +3,7 @@ use std::{
     time::SystemTime,
 };
 
-use crate::{*};
+use crate::*;
 
 use bevy_inspector_egui::bevy_egui::EguiContext;
 use local_ip_address::local_ip;
@@ -16,6 +16,7 @@ pub fn create_renet_server() -> RenetServer {
     println!("Creating Server! {:?}", server_addr);
 
     let socket = UdpSocket::bind(server_addr).unwrap();
+    //TODO increase block package queue size from default 8
     let connection_config = RenetConnectionConfig::default();
     let server_config = ServerConfig::new(64, PROTOCOL_ID, server_addr, ServerAuthentication::Unsecure);
     let current_time = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH).unwrap();

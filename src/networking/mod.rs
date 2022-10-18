@@ -16,7 +16,6 @@ pub use bevy::utils::HashMap;
 pub use bevy_renet::renet::*;
 pub use bevy_renet::*;
 
-
 mod client_utils;
 mod message;
 mod server_utils;

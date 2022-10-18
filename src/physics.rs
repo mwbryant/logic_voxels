@@ -12,9 +12,12 @@ impl Plugin for PhysicsPlugin {
         app
             //.add_plugin(NoCameraPlayerPlugin)
             .add_plugin(RapierPhysicsPlugin::<NoUserData>::default())
-            //.add_plugin(RapierDebugRenderPlugin::default())
+            .add_plugin(RapierDebugRenderPlugin::default())
             .init_resource::<InputState>()
-            .init_resource::<MovementSettings>()
+            .insert_resource(MovementSettings {
+                sensitivity: 0.00012,
+                speed: 4.,
+            })
             .add_system_set(SystemSet::on_enter(ClientState::Gameplay).with_system(test_physics))
             .add_system_set(
                 SystemSet::on_update(ClientState::Gameplay)
@@ -27,13 +30,15 @@ impl Plugin for PhysicsPlugin {
 
 fn test_physics(mut commands: Commands, mut meshes: ResMut<Assets<Mesh>>, mut mats: ResMut<Assets<StandardMaterial>>) {
     commands
-        .spawn_bundle(PbrBundle {
-            mesh: meshes.add(shape::Cube::default().into()),
-            material: mats.add(Color::RED.into()),
-            ..default()
-        })
+        .spawn_bundle(SpatialBundle::default())
+        //.spawn_bundle(PbrBundle {
+        //mesh: meshes.add(shape::Cube::default().into()),
+        //material: mats.add(Color::RED.into()),
+        //..default()
+        //})
+        .insert(LockedAxes::ROTATION_LOCKED)
         .insert(RigidBody::Dynamic)
-        .insert(Collider::cuboid(0.5, 0.5, 0.5))
+        .insert(Collider::capsule(Vec3::new(0.0, 0.7, 0.0), Vec3::splat(0.0), 0.4))
         .insert(GravityScale(0.1))
         .insert(Restitution::coefficient(0.7));
 }
@@ -44,10 +49,10 @@ fn player_move(
     time: Res<Time>,
     windows: Res<Windows>,
     settings: Res<MovementSettings>,
-    mut query: Query<&mut Transform, With<FlyCam>>,
+    mut query: Query<(&mut Transform, &mut Velocity), With<FlyCam>>,
 ) {
     if let Some(window) = windows.get_primary() {
-        for mut transform in query.iter_mut() {
+        for (mut transform, mut phys_velocity) in query.iter_mut() {
             let mut velocity = Vec3::ZERO;
             let local_z = transform.local_z();
             let forward = -Vec3::new(local_z.x, 0., local_z.z);
@@ -60,8 +65,8 @@ fn player_move(
                         KeyCode::S => velocity -= forward,
                         KeyCode::A => velocity -= right,
                         KeyCode::D => velocity += right,
-                        KeyCode::Space => velocity += Vec3::Y,
-                        KeyCode::LShift => velocity -= Vec3::Y,
+                        //KeyCode::Space => velocity += Vec3::Y,
+                        //KeyCode::LShift => velocity -= Vec3::Y,
                         _ => (),
                     }
                 }
@@ -69,7 +74,10 @@ fn player_move(
 
             velocity = velocity.normalize_or_zero();
 
-            transform.translation += velocity * time.delta_seconds() * settings.speed
+            info!("{:?}", velocity);
+            phys_velocity.linvel.x = 0.0;
+            phys_velocity.linvel.z = 0.0;
+            phys_velocity.linvel += velocity * settings.speed * time.delta_seconds() * 100.;
         }
     } else {
         warn!("Primary window not found for `player_move`!");
@@ -129,6 +137,8 @@ fn cursor_grab(keys: Res<Input<KeyCode>>, mut windows: ResMut<Windows>) {
 }
 
 pub fn add_collider(commands: &mut Commands, entity: Entity, desc: MeshDescription) {
+    //FIXME this seems to not work if the entity did not already have a collider
+    // Is rapier caching something? can I add a disabled collider to work around this
     if let Some(new_collider) = create_collider(desc) {
         commands.entity(entity).insert(new_collider);
     } else {

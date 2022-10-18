@@ -3,9 +3,12 @@ use std::{
     time::{Duration, SystemTime},
 };
 
-use crate::{*};
-use bevy::{app::AppExit};
+use crate::*;
+use bevy::app::AppExit;
 use bevy_inspector_egui::{bevy_egui::EguiContext, egui};
+use bevy_rapier3d::prelude::{
+    Ccd, Collider, Damping, Dominance, ExternalForce, GravityScale, LockedAxes, RigidBody, Velocity,
+};
 
 pub fn create_renet_client(server_addr: SocketAddr) -> RenetClient {
     let socket = UdpSocket::bind("0.0.0.0:0").unwrap();
@@ -158,10 +161,35 @@ pub fn spawn_camera(mut commands: Commands) {
 
     commands
         .spawn_bundle(Camera3dBundle {
-            transform: Transform::from_xyz(-0.0, 0.0, -0.0).looking_at(Vec3::new(100.0, 0.0, 100.0), Vec3::Y),
+            transform: Transform::from_xyz(-0.0, 1.1, -0.0).looking_at(Vec3::new(100.0, 0.0, 100.0), Vec3::Y),
             ..default()
         })
         .insert_bundle(VisibilityBundle::default())
         //.insert(PhysicsObject::default())
+        .insert(RigidBody::Dynamic)
+        //.insert(Collider::cuboid(0.5, 0.5, 0.5))
+        //.insert(Collider::capsule(Vec3::splat(0.0), Vec3::splat(0.5), 0.3))
+        .insert(Collider::capsule(
+            Vec3::new(0.0, -1.0, 0.0),
+            Vec3::new(0.0, 0.0, 0.0),
+            0.4,
+        ))
+        .insert(LockedAxes::ROTATION_LOCKED)
+        .insert(Dominance::group(10))
+        .insert(GravityScale(0.1))
+        .insert(Damping {
+            linear_damping: 0.5,
+
+            angular_damping: 1.0,
+        })
+        .insert(Velocity {
+            linvel: Vec3::ZERO,
+            angvel: Vec3::ZERO,
+        })
+        .insert(ExternalForce {
+            force: Vec3::ZERO,
+            torque: Vec3::ZERO,
+        })
+        .insert(Ccd::enabled())
         .insert(FlyCam);
 }

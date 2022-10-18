@@ -1,6 +1,4 @@
-
-
-use bevy::{log::LogSettings};
+use bevy::log::LogSettings;
 
 use logic_voxels::{client_chunks::ClientChunkPlugin, server_chunks::ServerChunkPlugin, *};
 use renet_visualizer::RenetServerVisualizer;
@@ -55,8 +53,8 @@ fn main() {
         .add_system_set(SystemSet::on_update(ClientState::MainMenu).with_system(client_connection_system))
         .add_system_set(SystemSet::on_update(ClientState::Connecting).with_system(client_connection_ready))
         .add_plugin(ClientChunkPlugin)
-        .add_plugin(PhysicsPlugin)
         .add_plugins(DefaultPlugins)
+        .add_plugin(PhysicsPlugin)
         //TODO move
         .add_plugin(MaterialPlugin::<CustomMaterial>::default())
         .add_plugin(WorldInspectorPlugin::default())
