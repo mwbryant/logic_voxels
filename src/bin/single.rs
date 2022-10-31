@@ -1,5 +1,8 @@
+use std::net::SocketAddr;
+
 use bevy::log::LogSettings;
 
+use local_ip_address::local_ip;
 use logic_voxels::{client_chunks::ClientChunkPlugin, server_chunks::ServerChunkPlugin, *};
 use renet_visualizer::RenetServerVisualizer;
 
@@ -40,7 +43,7 @@ fn main() {
         .add_state(ClientState::Connecting)
         .add_plugin(RenetClientPlugin)
         .add_plugin(RenetServerPlugin)
-        .insert_resource(create_renet_client("192.168.0.16:5000".parse().unwrap()))
+        .insert_resource(create_renet_client(SocketAddr::new(local_ip().unwrap(), 5000)))
         .insert_resource(create_renet_server())
         .init_resource::<Lobby>()
         .add_system(server_connection)
